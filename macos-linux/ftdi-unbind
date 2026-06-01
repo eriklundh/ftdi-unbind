@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+#
+# ftdi-unbind VID:PID [--dry-run]
+#
+# Detach the kernel ftdi_sio driver from every USB interface whose parent
+# device matches VID:PID, freeing the chip for libusb / pyftdi / WebUSB.
+#
+# Safe by design:
+#   * touches ONLY interfaces currently bound to ftdi_sio
+#   * leaves interfaces bound to other drivers, or already free, untouched
+#   * --dry-run shows exactly what it would do and changes nothing
+#   * reversible with ftdi-bind VID:PID  (or just unplug/replug)
+#
+set -euo pipefail
+shopt -s nullglob
+
+DRIVER=/sys/bus/usb/drivers/ftdi_sio
+PROG=${0##*/}
+
+usage() {
+    cat >&2 <<EOF
+usage: $PROG VID:PID [--dry-run]
+
+  $PROG 0403:6015          detach ftdi_sio from all FT231X (0403:6015)
+  $PROG 0x0403:0x6015 -n   preview only — change nothing
+
+Restore with:  ftdi-bind VID:PID   (or unplug/replug the device)
+EOF
+    exit 2
+}
+
+DRYRUN=0
+VIDPID=""
+for a in "$@"; do
+    case "$a" in
+        -n|--dry-run) DRYRUN=1 ;;
+        -h|--help)    usage ;;
+        -*)           echo "$PROG: unknown option $a" >&2; usage ;;
+        *)            VIDPID="$a" ;;
+    esac
+done
+[ -n "$VIDPID" ] || usage
+
+# Normalise VID:PID -> lowercase, strip any 0x, zero-pad to 4 hex digits.
+arg="${VIDPID,,}"; arg="${arg//0x/}"
+[[ "$arg" == *:* ]] || usage
+vraw="${arg%%:*}"; praw="${arg##*:}"
+[[ "$vraw" =~ ^[0-9a-f]{1,4}$ && "$praw" =~ ^[0-9a-f]{1,4}$ ]] || usage
+VID=$(printf '%04x' "0x$vraw")
+PID=$(printf '%04x' "0x$praw")
+
+# Need root to write sysfs — but only if we're actually going to write.
+if [ "$DRYRUN" -eq 0 ] && [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$(readlink -f "$0")" "$@"
+fi
+
+if [ ! -d "$DRIVER" ]; then
+    echo "$PROG: ftdi_sio not loaded — nothing is bound, nothing to do."
+    exit 0
+fi
+
+matched=0
+acted=0
+for devdir in /sys/bus/usb/devices/*; do
+    [ -r "$devdir/idVendor" ] || continue
+    [ "$(< "$devdir/idVendor")" = "$VID" ] || continue
+    [ "$(< "$devdir/idProduct")" = "$PID" ] || continue
+    matched=1
+    dev=${devdir##*/}
+    serial=$(cat "$devdir/serial" 2>/dev/null || echo "no-serial")
+    echo "device $dev  ($VID:$PID, serial: $serial)"
+    for intf in /sys/bus/usb/devices/"$dev":*; do
+        [ -d "$intf" ] || continue
+        id=${intf##*/}
+        if [ -e "$DRIVER/$id" ]; then
+            if [ "$DRYRUN" -eq 1 ]; then
+                echo "  would unbind $id"
+            elif echo -n "$id" > "$DRIVER/unbind" 2>/dev/null; then
+                echo "  unbound  $id"
+                acted=$((acted + 1))
+            else
+                echo "  WARN: failed to unbind $id" >&2
+            fi
+        else
+            echo "  skip     $id (not bound to ftdi_sio)"
+        fi
+    done
+done
+
+if [ "$matched" -eq 0 ]; then
+    echo "$PROG: no device matching $VID:$PID is attached." >&2
+    exit 1
+fi
+
+if [ "$DRYRUN" -eq 1 ]; then
+    echo "(dry run — nothing changed)"
+else
+    echo "$PROG: $acted interface(s) unbound."
+fi
