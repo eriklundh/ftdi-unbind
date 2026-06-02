@@ -3,6 +3,7 @@
 #include "args.h"
 #include "match.h"
 #include "enum.h"
+#include "elevate.h"
 
 /* Phase 5 will split this into main_unbind.c / main_bind.c. */
 #define ACTION_THIS  ACTION_UNBIND
@@ -117,6 +118,17 @@ int main(int argc, char **argv) {
         }
         free_device_records(recs, n);
         return EXIT_OK;
+    }
+
+    /* Elevation required for all driver-mutating operations. */
+    if (!is_elevated()) {
+        fprintf(stderr, "error: administrator privileges required.\n");
+        fprintf(stderr, "Re-run from an elevated prompt:\n  %s", argv[0]);
+        for (int i = 1; i < argc; i++)
+            fprintf(stderr, " %s", argv[i]);
+        fprintf(stderr, "\n");
+        free_device_records(recs, n);
+        return EXIT_USAGE;
     }
 
     /* Phase 3/4: driver install/restore not yet implemented */
