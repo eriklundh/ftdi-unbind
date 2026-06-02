@@ -22,6 +22,7 @@ typedef struct {
     int         dry_run;  /* --dry-run: resolve + report, change nothing */
     int         all;      /* --all: act on every matching device */
     int         help;     /* -h / --help */
+    int         list;     /* --list: enumerate devices, no VID:PID needed */
 } options;
 
 /*

@@ -34,12 +34,22 @@ enforced.
 
 ## Acceptance
 
-- [ ] `--list` shows the attached FT231X as `0403:6015` with its driver
-- [ ] `--dry-run 0403:6015` names the exact device and changes nothing
-- [ ] Two identical dongles → `--dry-run` lists both; a real action
-      refuses without `--all` and exits 1
-- [ ] No admin needed for either path
+- [x] `--list` shows the attached FT231X as `0403:6015` with driver `usbser`
+- [x] `--dry-run 0403:6015` names the exact device (instance USB\VID_0403&PID_6015\D30JZVRL, driver usbser) and changes nothing
+- [x] Two identical dongles → `--dry-run` lists both (FT231X loopback + ULX3S FPGA 85K,
+      both `0403:6015`); refusing without `--all` exits 1; `--all` exits 0
+- [x] No admin needed for either path
 - [ ] Branch merged to `main`
+
+## Exe path
+
+```
+build\Release\ftdi-rebind.exe
+```
+
+`CMakePresets.json` `vs2022-x64-release` hardwires `binaryDir` to
+`${sourceDir}/build` and config to `Release`, so this path is stable for
+the lifetime of this preset.
 
 ## Notes
 

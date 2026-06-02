@@ -78,6 +78,28 @@ static void test_bind_action(void) {
     assert(opt.action == ACTION_BIND);
 }
 
+static void test_list_alone(void) {
+    char *argv[] = { "ftdi-rebind", "--list" };
+    options opt;
+    assert(parse_args(2, argv, ACTION_UNBIND, &opt) == EXIT_OK);
+    assert(opt.list   == 1);
+    assert(opt.vidpid == NULL);
+}
+
+static void test_list_with_all(void) {
+    char *argv[] = { "ftdi-rebind", "--list", "--all" };
+    options opt;
+    assert(parse_args(3, argv, ACTION_UNBIND, &opt) == EXIT_OK);
+    assert(opt.list == 1 && opt.all == 1);
+}
+
+static void test_minimal_has_list_zero(void) {
+    char *argv[] = { "ftdi-unbind", "0403:6015" };
+    options opt;
+    assert(parse_args(2, argv, ACTION_UNBIND, &opt) == EXIT_OK);
+    assert(opt.list == 0);
+}
+
 static void test_exit_codes_are_correct_values(void) {
     assert(EXIT_OK      == 0);
     assert(EXIT_NOMATCH == 1);
@@ -95,6 +117,9 @@ int main(void) {
     test_unknown_flag();
     test_missing_vidpid();
     test_bind_action();
+    test_list_alone();
+    test_list_with_all();
+    test_minimal_has_list_zero();
     test_exit_codes_are_correct_values();
     printf("All args tests passed.\n");
     return 0;
