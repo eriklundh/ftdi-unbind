@@ -47,3 +47,18 @@ foreach(_test match args)
         $<$<NOT:$<C_COMPILER_ID:MSVC>>:-UNDEBUG>)
     add_test(NAME ${_test} COMMAND $<TARGET_FILE:test_${_test}>)
 endforeach()
+
+# Phase 2: enum.c needs libwdi — kept in its own OBJECT lib so ftdi_core stays
+# dep-free and unit tests remain buildable without admin or hardware.
+add_library(ftdi_enum OBJECT src/enum.c)
+target_include_directories(ftdi_enum PRIVATE src ${LIBWDI_INCLUDE_DIR})
+
+# Phase 2: ftdi-rebind exe wires enum + core into a runnable tool.
+# Phase 5 will split this into ftdi-unbind.exe / ftdi-bind.exe.
+add_executable(ftdi-rebind src/main.c)
+target_include_directories(ftdi-rebind PRIVATE src ${LIBWDI_INCLUDE_DIR})
+target_link_libraries(ftdi-rebind PRIVATE
+    ftdi_core
+    ftdi_enum
+    ${LIBWDI_LIB}
+    setupapi cfgmgr32 ole32 newdev)
