@@ -10,6 +10,12 @@ but the actual install runs on a real FT231X with admin — a human step.
 `ftdi-unbind.exe 0403:6015` installs WinUSB on the matched device,
 freeing it for WebUSB / pyftdi.
 
+> **Note — exe name in Phase 3:** the Phase 5 split into `ftdi-unbind.exe`
+> / `ftdi-bind.exe` hasn't happened yet. The built executable is
+> `build\Release\ftdi-rebind.exe`; it has `ACTION_UNBIND` baked in and
+> behaves identically to the eventual `ftdi-unbind.exe`. Substitute
+> `ftdi-rebind.exe` wherever this doc says `ftdi-unbind` below.
+
 ## Steps
 
 1. **Elevation check** (`src/elevate.c`): detect via `OpenProcessToken` +
