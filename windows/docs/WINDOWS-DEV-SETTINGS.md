@@ -35,13 +35,24 @@ unsigned and unknown to the reputation service, so Smart App Control
 will block it the first time it is run.  This breaks `ctest`, the probe
 exe, and every tool you build.
 
-**Fix.** The only option is to turn it off:
+**Fix.** The only option is to turn it off.
 
+Via the UI:
 ```
 Windows Security
   → App & browser control
   → Smart App Control settings
   → Off
+```
+
+Or from an **elevated** PowerShell prompt:
+```powershell
+.\scripts\disable-sac.ps1
+```
+
+To check the current state (no elevation required):
+```powershell
+.\scripts\check-dev-security.ps1
 ```
 
 > **Note:** Smart App Control cannot be re-enabled without resetting the
@@ -66,8 +77,19 @@ and build trees entirely.
 | `%TEMP%` | CMake uses temp directories during configure |
 | Visual Studio's intermediate output directories (under your source root) | Covered by the source root exclusion above |
 
-**How to add a folder exclusion:**
+**How to add a folder exclusion.**
 
+From an **elevated** PowerShell prompt:
+```powershell
+.\scripts\add-defender-exclusion.ps1 C:\usr\local\src
+```
+
+To check whether a path is already excluded (no elevation required):
+```powershell
+.\scripts\check-dev-security.ps1 C:\usr\local\src
+```
+
+Or via the UI:
 ```
 Windows Security
   → Virus & threat protection
