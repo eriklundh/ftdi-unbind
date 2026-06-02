@@ -195,6 +195,29 @@ All tests should run and either pass or fail on their own logic — no
 
 ---
 
+## 6. Opening an elevated PowerShell in the current directory
+
+When you are already in a non-elevated PowerShell and need to run a
+driver-mutating command (e.g. `ftdi-rebind.exe`), you do not need to
+close the window and re-open it as Administrator.  Spawn an elevated
+shell that inherits your current directory:
+
+```powershell
+Start-Process PowerShell -Verb RunAs -ArgumentList "-NoExit", "-Command", "Set-Location '$PWD'"
+```
+
+This opens a new elevated PowerShell window already `cd`'d into the
+directory you were in.  From there you can run:
+
+```powershell
+.\build\Release\ftdi-rebind.exe 0403:6015
+```
+
+> **Why `-NoExit`?** Without it the window closes immediately after the
+> `Set-Location` command completes, giving you no time to type anything.
+
+---
+
 ## Summary
 
 | Mechanism | Location | Action |
