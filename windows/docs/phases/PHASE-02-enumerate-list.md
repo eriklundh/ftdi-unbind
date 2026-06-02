@@ -35,9 +35,9 @@ enforced.
 ## Acceptance
 
 - [x] `--list` shows the attached FT231X as `0403:6015` with driver `usbser`
-- [ ] `--dry-run 0403:6015` names the exact device and changes nothing
+- [x] `--dry-run 0403:6015` names the exact device (instance USB\VID_0403&PID_6015\D30JZVRL, driver usbser) and changes nothing
 - [ ] Two identical dongles → `--dry-run` lists both; a real action
-      refuses without `--all` and exits 1
+      refuses without `--all` and exits 1  *(hardware-gated: needs a second FT231X)*
 - [x] No admin needed for either path
 - [ ] Branch merged to `main`
 
