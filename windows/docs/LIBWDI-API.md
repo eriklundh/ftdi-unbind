@@ -86,10 +86,13 @@ Flow for `ftdi-unbind`:
 ## Version / capability
 
 ```c
-const char *wdi_get_version(void);   // or wdi_get_version_info — check header
+int         wdi_get_wdf_version(void);    // returns WDF_VER (e.g. 1011)
+const char *wdi_strerror(int errcode);    // human-readable error string
 ```
 
-Phase 0's probe calls this to prove the static link resolves.
+`wdi_get_version()` does **not** exist in v1.5.0 — there is no library-version
+function.  Phase 0's probe uses `wdi_get_wdf_version()` + `wdi_strerror(0)`
+to prove the static link resolves and the embedded payload is present.
 
 ## Elevation
 
