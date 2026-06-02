@@ -3,6 +3,8 @@
 #include "args.h"
 #include "match.h"
 #include "enum.h"
+#include "elevate.h"
+#include "install.h"
 
 /* Phase 5 will split this into main_unbind.c / main_bind.c. */
 #define ACTION_THIS  ACTION_UNBIND
@@ -119,8 +121,37 @@ int main(int argc, char **argv) {
         return EXIT_OK;
     }
 
-    /* Phase 3/4: driver install/restore not yet implemented */
-    fprintf(stderr, "error: driver operations not yet implemented (Phase 3/4)\n");
+    /* Elevation required for all driver-mutating operations. */
+    if (!is_elevated()) {
+        fprintf(stderr, "error: administrator privileges required.\n");
+        fprintf(stderr, "Re-run from an elevated prompt:\n  %s", argv[0]);
+        for (int i = 1; i < argc; i++)
+            fprintf(stderr, " %s", argv[i]);
+        fprintf(stderr, "\n");
+        free_device_records(recs, n);
+        return EXIT_USAGE;
+    }
+
+    if (opt.action == ACTION_UNBIND) {
+        for (int i = 0; i < show; i++) {
+            int j = idx[i];
+            printf("installing WinUSB on %04x:%04x  %s ...\n",
+                   recs[j].vid, recs[j].pid, recs[j].desc);
+            int wrc = install_winusb(recs[j].vid, recs[j].pid,
+                                     recs[j].device_id);
+            if (wrc != 0) {
+                fprintf(stderr, "  error: %s\n", install_strerror(wrc));
+                free_device_records(recs, n);
+                return 1;
+            }
+            printf("  ok; device now presents as WinUSB\n");
+        }
+        free_device_records(recs, n);
+        return EXIT_OK;
+    }
+
+    /* Phase 4: VCP restore not yet implemented */
+    fprintf(stderr, "error: VCP restore not yet implemented (Phase 4)\n");
     free_device_records(recs, n);
     return 1;
 }

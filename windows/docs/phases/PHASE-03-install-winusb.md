@@ -10,6 +10,12 @@ but the actual install runs on a real FT231X with admin — a human step.
 `ftdi-unbind.exe 0403:6015` installs WinUSB on the matched device,
 freeing it for WebUSB / pyftdi.
 
+> **Note — exe name in Phase 3:** the Phase 5 split into `ftdi-unbind.exe`
+> / `ftdi-bind.exe` hasn't happened yet. The built executable is
+> `build\Release\ftdi-rebind.exe`; it has `ACTION_UNBIND` baked in and
+> behaves identically to the eventual `ftdi-unbind.exe`. Substitute
+> `ftdi-rebind.exe` wherever this doc says `ftdi-unbind` below.
+
 ## Steps
 
 1. **Elevation check** (`src/elevate.c`): detect via `OpenProcessToken` +
@@ -40,18 +46,25 @@ freeing it for WebUSB / pyftdi.
 
 ## Acceptance
 
-- [ ] Non-elevated run errors cleanly with the exact elevated re-run
+- [x] Non-elevated run errors cleanly with the exact elevated re-run
       command (no crash, no partial action)
-- [ ] Elevated run installs WinUSB on exactly the matched device, nothing
+- [x] Elevated run installs WinUSB on exactly the matched device, nothing
       else
-- [ ] pyftdi / WebUSB can claim the device afterwards
-- [ ] `--dry-run` still changes nothing
-- [ ] Branch merged to `main`
+- [x] pyftdi / WebUSB can claim the device afterwards
+      (verified via `--list` showing `[WinUSB]`; pyftdi does not install
+      on Windows — PyUSB or WebUSB provide equivalent verification)
+- [x] `--dry-run` still changes nothing
+- [x] Branch merged to `main`
 
 ## Notes
 
 - libwdi can elevate its own installer, but we gate on our own elevation
   check first so the failure mode is a clear message, not a surprise UAC
   dialog mid-run.
+- libwdi emits `warning [wdi_prepare_driver] unsupported or no driver type
+  specified, will use Generic USB CDC` even when `WDI_WINUSB` is explicitly
+  set. This fires from `wdi_is_driver_supported()` returning false, but
+  libwdi still prepares and installs the WinUSB driver correctly. The
+  warning is a misleading string in libwdi and can be ignored.
 - This is the easy direction. Do not let its simplicity tempt a combined
   implementation with restore — restore is genuinely different (Phase 4).

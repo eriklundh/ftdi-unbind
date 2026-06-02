@@ -53,6 +53,13 @@ endforeach()
 add_library(ftdi_enum OBJECT src/enum.c)
 target_include_directories(ftdi_enum PRIVATE src ${LIBWDI_INCLUDE_DIR})
 
+# Phase 3: elevation check + WinUSB install — needs Win32/libwdi but not the
+# pure core, so it lives in its own OBJECT lib.
+add_library(ftdi_install OBJECT
+    src/elevate.c
+    src/install.c)
+target_include_directories(ftdi_install PRIVATE src ${LIBWDI_INCLUDE_DIR})
+
 # Phase 2: ftdi-rebind exe wires enum + core into a runnable tool.
 # Phase 5 will split this into ftdi-unbind.exe / ftdi-bind.exe.
 add_executable(ftdi-rebind src/main.c)
@@ -60,5 +67,6 @@ target_include_directories(ftdi-rebind PRIVATE src ${LIBWDI_INCLUDE_DIR})
 target_link_libraries(ftdi-rebind PRIVATE
     ftdi_core
     ftdi_enum
+    ftdi_install
     ${LIBWDI_LIB}
     setupapi cfgmgr32 ole32 newdev)

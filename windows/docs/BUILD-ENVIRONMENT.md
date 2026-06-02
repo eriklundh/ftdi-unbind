@@ -19,11 +19,12 @@ whichever they have.
 | **usb.ids** (optional) | http://www.linux-usb.org/usb.ids | rolling | public | Only if you want libwdi to resolve vendor names; not required. |
 
 **No separate WDK / WinUSB redistributable download is needed on Windows
-10/11.** libwdi v1.5.0 ships the WinUSB driver payload embedded, and the
-Win8-era redistributables it once needed are only required when targeting
-Windows 8 or earlier — out of scope here. (Reference: the libwdi wiki
-"Compiling and debugging" page states the redistributable is "not needed
-on Windows 10 or later".)
+10/11.** WinUSB (`winusb.sys`) ships in-box since Windows 7; the WDK
+co-installer DLLs (`WinUSBCoInstaller2.dll`, `WdfCoInstaller0*.dll`) are
+only needed for Windows XP/Vista targets and are absent from the modern
+Windows 10 SDK. The libwdi source requires two small patches (see Step 1
+below) to build without those DLLs while still generating a correct
+WinUSB `.inf`.
 
 ## Before you start — Windows security settings
 
@@ -44,26 +45,82 @@ before attempting a build.
 ```bat
 git clone https://github.com/pbatard/libwdi.git
 cd libwdi
-git checkout v1.5.0
+git checkout v1.5.0   # commit 90278c5
 ```
 
 libwdi builds with its own MSVC solution (it does not ship CMake). Before
-building, make three changes to `msvc/config.h` and one to the solution:
+building, make the following changes (patches apply to commit `90278c5`;
+items 4–5 are not in the upstream source yet — see `docs/LIBWDI-API.md`
+for the upstream issue context):
+
+**`msvc/config.h`**
 
 1. **Comment out `WDK_DIR`, `LIBUSB0_DIR`, and `LIBUSBK_DIR`** — we only
-   need WinUSB, and on Windows 10/11 WinUSB is inbox; the Win8-era
-   co-installer DLLs referenced by those defines do not ship in the modern
-   Windows 10 SDK.  Add `#define USER_DIR "C:/nonexistent-placeholder"`
-   (any non-existent path) to satisfy the compile-time check in
-   `embedder.h` that requires at least one driver-directory macro.
+   need WinUSB, and the Win8-era co-installer DLLs referenced by those
+   defines do not ship in the modern Windows 10 SDK.  Add
+   `#define USER_DIR "C:/nonexistent-placeholder"` (any path) to satisfy
+   the compile-time check in `embedder.h` that requires at least one
+   driver-directory macro.
 2. **Keep `#define WDF_VER 1011`** — used unconditionally in `libwdi.c` to
    version-stamp the WinUSB INF; remove it and the build fails with
    `C2065: 'WDF_VER': undeclared identifier`.
 3. **Comment out `#define OPT_ARM`** — ARM64 cross-compiler not present on
-   this host.  Remove the `installer_arm64` `ProjectReference` from
-   `libwdi\.msvc\libwdi_static.vcxproj` and the `Build.0` entries for
-   `Release|x64` in `libwdi.sln` for the same project.
-4. **Redirect stderr in the pre-build event** (`.\embedder embedded.h 2>nul`)
+   this host.
+
+**`libwdi/libwdi.c`**
+
+4. **Patch `wdi_is_driver_supported` so WinUSB always returns `TRUE`.**
+   The default code gates WinUSB on `#if defined(WDK_DIR)`, which returns
+   `FALSE` when `WDK_DIR` is unset — causing libwdi to silently fall back
+   to the Generic USB CDC (usbser) driver.  Replace the gated block with
+   an unconditional `return TRUE;`:
+
+   ```c
+   // Before:
+   case WDI_WINUSB:
+   #if defined(WDK_DIR)
+       return TRUE;
+   #else
+       return FALSE;
+   #endif
+
+   // After:
+   case WDI_WINUSB:
+       /* WinUSB is always in-box on Windows 7+; co-installers are not
+        * required on Windows 8+ so WDK_DIR need not be set. */
+       return TRUE;
+   ```
+
+**`libwdi/winusb.inf.in`**
+
+5. **Strip the co-installer DLL entries** from `SourceDisksFiles.x86` and
+   `SourceDisksFiles.amd64`, and make the `CoInstallers` sections
+   no-ops (matching the ARM64 section which is already empty).  The
+   unpatched template lists `WinUSBCoInstaller2.dll` and
+   `WdfCoInstaller0*.dll` as source files — without them extracted the
+   Windows installer fails.  On Windows 8+ those DLLs are not needed.
+
+   Patched sections (replace with):
+   ```inf
+   ; Co-installers are not required on Windows 8+ where WinUSB is in-box.
+   [USB_Install.NTx86.CoInstallers]
+   ;
+
+   [USB_Install.NTamd64.CoInstallers]
+   ;
+
+   [SourceDisksFiles.x86]
+   ;
+
+   [SourceDisksFiles.amd64]
+   ;
+   ```
+
+**`libwdi/.msvc/libwdi_static.vcxproj` and `libwdi.sln`**
+
+6. **Remove `installer_arm64` references** — `ProjectReference` from the
+   vcxproj and `Build.0` entries for `Release|x64` in the sln.
+7. **Redirect stderr in the pre-build event** (`.\embedder embedded.h 2>nul`)
    so that the non-fatal "No user embeddable files found" warning is not
    parsed as a build error by MSBuild.
 
