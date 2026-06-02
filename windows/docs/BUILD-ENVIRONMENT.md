@@ -25,6 +25,20 @@ Windows 8 or earlier — out of scope here. (Reference: the libwdi wiki
 "Compiling and debugging" page states the redistributable is "not needed
 on Windows 10 or later".)
 
+## Before you start — Windows security settings
+
+Freshly compiled executables are unsigned.  Windows 11's Smart App
+Control and Windows Defender's real-time scanner can silently block them
+from running, producing "An Application Control policy has blocked this
+file" when you try to run the probe or `ctest`.  Third-party products
+such as Acronis True Image exhibit the same behaviour via their Active
+Protection modules.
+
+**See [`docs/WINDOWS-DEV-SETTINGS.md`](WINDOWS-DEV-SETTINGS.md) for the
+exact steps** (Smart App Control, Defender folder exclusions, Acronis
+trusted paths).  Configure those settings once on each developer machine
+before attempting a build.
+
 ## Step 1 — Get and build libwdi as a static library
 
 ```bat

@@ -121,8 +121,10 @@ elevation. Don't automate them in a loop.
    apply; the Linux-specific scheduling bits do not — this is Windows)
 3. `PLAN.md`
 4. `docs/BUILD-ENVIRONMENT.md` — toolchain, libwdi download + static build
-5. `docs/LIBWDI-API.md` — the wdi_* calls used
-6. `docs/RESTORE-STRATEGY.md` — before Phase 4 (the hard part)
+5. `docs/WINDOWS-DEV-SETTINGS.md` — Smart App Control, Defender exclusions,
+   Acronis: configure once per machine or built exes won't run
+6. `docs/LIBWDI-API.md` — the wdi_* calls used
+7. `docs/RESTORE-STRATEGY.md` — before Phase 4 (the hard part)
 
 
 ## Commit convention
