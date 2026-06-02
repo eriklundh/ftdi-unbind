@@ -67,6 +67,11 @@ from github.com/pbatard/libwdi, the VS C++ workload, optional Unity), the
 static-libwdi build steps, the link dependencies, and the **LGPL-3.0**
 relink note.
 
+See `docs/WINDOWS-DEV-SETTINGS.md` before your first build: Windows 11's
+Smart App Control and Defender (and tools like Acronis True Image) block
+unsigned executables by default.  One-time per-machine configuration is
+required or the built `.exe` files and `ctest` will not run.
+
 ## The one thing to understand first
 
 **The two directions are not symmetric.**

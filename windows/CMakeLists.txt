@@ -27,3 +27,23 @@ target_include_directories(ftdi-rebind-probe PRIVATE ${LIBWDI_INCLUDE_DIR})
 target_link_libraries(ftdi-rebind-probe PRIVATE
     ${LIBWDI_LIB}
     setupapi cfgmgr32 ole32 newdev)
+
+# Phase 1: pure core — VID:PID matching, arg parsing.
+# No libwdi, no Windows-driver APIs: the OBJECT library compiles with zero
+# extra dependencies so unit tests run without admin or hardware.
+add_library(ftdi_core OBJECT
+    src/match.c
+    src/args.c)
+target_include_directories(ftdi_core PUBLIC src)
+
+enable_testing()
+
+foreach(_test match args)
+    add_executable(test_${_test} tests/test_${_test}.c)
+    target_link_libraries(test_${_test} PRIVATE ftdi_core)
+    # /UNDEBUG keeps assert() active even in Release so CTest catches failures.
+    target_compile_options(test_${_test} PRIVATE
+        $<$<C_COMPILER_ID:MSVC>:/UNDEBUG>
+        $<$<NOT:$<C_COMPILER_ID:MSVC>>:-UNDEBUG>)
+    add_test(NAME ${_test} COMMAND $<TARGET_FILE:test_${_test}>)
+endforeach()
