@@ -70,18 +70,31 @@ bool wdi_is_driver_supported(enum wdi_driver_type type,
                              struct wdi_driver_info *info_out);
 ```
 
-Flow for `ftdi-unbind`:
-1. `wdi_create_list` → find the single `wdi_device_info*` whose vid/pid
-   match (reuse the Phase 1 matcher on the adapted records, then map the
-   chosen record back to its `wdi_device_info*`).
-2. `wdi_prepare_driver(dev, tmp, "ftdi_winusb.inf", &opts)` with
-   `opts.driver_type = WDI_WINUSB`. This autogenerates the inf + a signed
-   catalog (libwdi self-signs with a generated cert) into `tmp`.
-3. `wdi_install_driver(dev, tmp, "ftdi_winusb.inf", NULL)`. libwdi spawns
-   an **elevated** installer; if our process isn't elevated this is where
-   it matters — we check elevation *first* and error cleanly (Phase 3),
-   rather than relying on libwdi's own elevation prompt.
-4. Check the return; on non-zero, print `wdi_strerror(rc)`.
+Flow for `ftdi-unbind` (implemented in `src/install.c`):
+
+1. The caller (`main.c`) already holds a matched `device_record`
+   (vid, pid, device_id) from Phase 2 enumeration. `install_winusb()`
+   takes those three values.
+2. `install_winusb` calls `wdi_create_list` a second time with
+   `list_all=TRUE` to obtain a fresh `wdi_device_info*` list whose nodes
+   stay alive through the install. Walk the list to find the node whose
+   `vid`, `pid`, and `device_id` all match exactly.
+3. Build a temp dir path: `GetTempPathA` returns `%TEMP%\` (with trailing
+   backslash); append `ftdi_winusb_<pid>` and `CreateDirectoryA`. libwdi
+   writes the generated `.inf` and self-signed `.cat` there.
+4. `wdi_prepare_driver(dev, tmp, "ftdi_winusb.inf", &opts)` with
+   `opts.driver_type = WDI_WINUSB`. Autogenerates the inf + signed catalog
+   (libwdi self-signs with a per-run generated cert) into `tmp`.
+5. `wdi_install_driver(dev, tmp, "ftdi_winusb.inf", NULL)`. libwdi spawns
+   an elevated installer subprocess; the elevation check in `main.c` fires
+   *before* this call so the failure mode is our clear error message, not
+   a surprise UAC dialog.
+6. `wdi_destroy_list(list)` — always called, including on error paths.
+7. Check the return; on non-zero, print `wdi_strerror(rc)`.
+
+The temp dir (`%TEMP%\ftdi_winusb_<pid>`) is not deleted after install —
+it holds the generated `.inf`/`.cat` and is cleaned up by the OS temp
+policy. This is consistent with Zadig's behaviour.
 
 ## Version / capability
 
