@@ -38,7 +38,7 @@ target_include_directories(ftdi_core PUBLIC src)
 
 enable_testing()
 
-foreach(_test match args)
+foreach(_test match args restore)
     add_executable(test_${_test} tests/test_${_test}.c)
     target_link_libraries(test_${_test} PRIVATE ftdi_core)
     # /UNDEBUG keeps assert() active even in Release so CTest catches failures.
@@ -60,6 +60,11 @@ add_library(ftdi_install OBJECT
     src/install.c)
 target_include_directories(ftdi_install PRIVATE src ${LIBWDI_INCLUDE_DIR})
 
+# Phase 4: VCP restore — SetupAPI/CfgMgr32/newdev; no libwdi.
+# Depends on ftdi_core for hwid_matches_vidpid.
+add_library(ftdi_restore OBJECT src/restore.c)
+target_include_directories(ftdi_restore PRIVATE src)
+
 # Phase 2: ftdi-rebind exe wires enum + core into a runnable tool.
 # Phase 5 will split this into ftdi-unbind.exe / ftdi-bind.exe.
 add_executable(ftdi-rebind src/main.c)
@@ -68,5 +73,6 @@ target_link_libraries(ftdi-rebind PRIVATE
     ftdi_core
     ftdi_enum
     ftdi_install
+    ftdi_restore
     ${LIBWDI_LIB}
     setupapi cfgmgr32 ole32 newdev)
