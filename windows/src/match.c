@@ -40,10 +40,16 @@ int vidpid_parse(const char *arg, unsigned short *vid, unsigned short *pid) {
     return parse_hex16(vp, vlen, vid) || parse_hex16(pp, plen, pid);
 }
 
-/* stub — replaced in feat(match): implement device matching */
 int match_devices(const device_record *recs, int n,
                   unsigned short vid, unsigned short pid,
                   int *out_idx, int out_cap) {
-    (void)recs; (void)n; (void)vid; (void)pid; (void)out_idx; (void)out_cap;
-    return 0;
+    int count = 0;
+    for (int i = 0; i < n; i++) {
+        if (recs[i].vid == vid && recs[i].pid == pid) {
+            if (count < out_cap)
+                out_idx[count] = i;
+            count++;
+        }
+    }
+    return count;
 }
