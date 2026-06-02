@@ -126,3 +126,10 @@ token check (`OpenProcessToken` + `GetTokenInformation(TokenElevation)`).
 
 Keep the libwdi dependency confined to the install (unbind) direction;
 the restore (bind) direction is pure Win32.
+
+## Known libwdi v1.5.0 issue (upstream #368)
+
+`wdi_is_driver_supported(WDI_WINUSB)` returns `FALSE` when `WDK_DIR` is
+undefined, causing silent fallback to usbser (Generic USB CDC). Fix and
+`winusb.inf.in` co-installer patch documented in `BUILD-ENVIRONMENT.md`.
+Upstream: https://github.com/pbatard/libwdi/issues/368

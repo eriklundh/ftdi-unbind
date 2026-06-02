@@ -50,8 +50,8 @@ git checkout v1.5.0   # commit 90278c5
 
 libwdi builds with its own MSVC solution (it does not ship CMake). Before
 building, make the following changes (patches apply to commit `90278c5`;
-items 4–5 are not in the upstream source yet — see `docs/LIBWDI-API.md`
-for the upstream issue context):
+items 4–5 are not in the upstream source yet —
+upstream issue: https://github.com/pbatard/libwdi/issues/368):
 
 **`msvc/config.h`**
 
