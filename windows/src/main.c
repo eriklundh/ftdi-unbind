@@ -87,7 +87,7 @@ int main(int argc, char **argv) {
     /* Ambiguity check: refuse unless --all */
     if (count > 1 && !opt.all) {
         fprintf(stderr,
-            "error: %d devices match %04x:%04x — use --all or unplug the others\n",
+            "error: %d devices match %04x:%04x; use --all or unplug the others\n",
             count, vid, pid);
         int show = (count < MAX_MATCHES) ? count : MAX_MATCHES;
         for (int i = 0; i < show; i++) {
