@@ -33,20 +33,34 @@ cd libwdi
 git checkout v1.5.0
 ```
 
-libwdi builds with its own MSVC solution (it does not ship CMake). Two
-things to configure before building, both in `msvc/config.h`:
+libwdi builds with its own MSVC solution (it does not ship CMake). Before
+building, make three changes to `msvc/config.h` and one to the solution:
 
-1. **Enable WinUSB, ignore the others.** We only need WinUSB (that's what
-   WebUSB/pyftdi use). Tell libwdi not to expect libusb0/libusbK driver
-   trees, so the build doesn't demand directories you don't have. In
-   `msvc/config.h` enable the WinUSB path and disable
-   `LIBUSB0_DIR` / `LIBUSBK_DIR` per the comments in that file.
-2. **`WDF_VER`** — set the WinUSB CoInstaller version define as documented
-   in `config.h` (current value per the libwdi install wiki).
+1. **Comment out `WDK_DIR`, `LIBUSB0_DIR`, and `LIBUSBK_DIR`** — we only
+   need WinUSB, and on Windows 10/11 WinUSB is inbox; the Win8-era
+   co-installer DLLs referenced by those defines do not ship in the modern
+   Windows 10 SDK.  Add `#define USER_DIR "C:/nonexistent-placeholder"`
+   (any non-existent path) to satisfy the compile-time check in
+   `embedder.h` that requires at least one driver-directory macro.
+2. **Keep `#define WDF_VER 1011`** — used unconditionally in `libwdi.c` to
+   version-stamp the WinUSB INF; remove it and the build fails with
+   `C2065: 'WDF_VER': undeclared identifier`.
+3. **Comment out `#define OPT_ARM`** — ARM64 cross-compiler not present on
+   this host.  Remove the `installer_arm64` `ProjectReference` from
+   `libwdi\.msvc\libwdi_static.vcxproj` and the `Build.0` entries for
+   `Release|x64` in `libwdi.sln` for the same project.
+4. **Redirect stderr in the pre-build event** (`.\embedder embedded.h 2>nul`)
+   so that the non-fatal "No user embeddable files found" warning is not
+   parsed as a build error by MSBuild.
 
-Then open `libwdi.sln` in Visual Studio, choose **Release / x64**, and
-build the **library** target. The static lib and header land under
-`.\x64\Release\` (e.g. `libwdi.lib`) with `libwdi.h` in `libwdi\`.
+After those changes, build from the command line:
+
+```bat
+MSBuild libwdi.sln /p:Configuration=Release /p:Platform=x64 /m /v:m
+```
+
+The static lib lands at `x64\Release\lib\libwdi.lib` and the header is
+`libwdi\libwdi.h`.
 
 > **Static CRT consistency (important).** Build libwdi with the **static
 > CRT (`/MT`)** so it matches our tools. Mixing `/MT` and `/MD` across
