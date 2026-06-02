@@ -112,6 +112,19 @@ elevation. Don't automate them in a loop.
 - **Output:** two self-contained `.exe`s, no DLL dependencies (libwdi
   embeds its driver payload).
 
+
+
+## What to read, in order
+
+1. This file (`CLAUDE.md`)
+2. `docs/OPERATING-CLAUDE-CODE.md` if copied in (Remote Control + budget
+   apply; the Linux-specific scheduling bits do not — this is Windows)
+3. `PLAN.md`
+4. `docs/BUILD-ENVIRONMENT.md` — toolchain, libwdi download + static build
+5. `docs/LIBWDI-API.md` — the wdi_* calls used
+6. `docs/RESTORE-STRATEGY.md` — before Phase 4 (the hard part)
+
+
 ## Commit convention
 
 Same as the sibling repos:
@@ -124,20 +137,37 @@ Types: `test`, `feat`, `fix`, `refactor`, `docs`, `chore`, `build`.
 Scopes: `match`, `cli`, `enum`, `install`, `restore`, `cmake`, `core`,
 `proj`.
 
+
+
+## Commit message convention
+
+Same format as the library repo:
+
+```
+<type>(<scope>): <imperative subject ≤ 60 chars>
+
+<body — what & why, not how, wrapped at 72 cols>
+
+Refs: <issue/phase>
+```
+
+Types: `test`, `feat`, `fix`, `refactor`, `docs`, `chore`, `build`, `style`.
+
+Scopes: `backend`, `web-serial`, `webusb`, `ui`, `settings`, `reconnect`,
+`terminal`, `proj`, `style`.
+
+Examples:
+- `feat(backend): define SerialBackend interface`
+- `test(web-serial): cover WebSerialBackend open/close lifecycle`
+- `feat(webusb): wire FtdiUart through SerialBackend`
+- `test(settings): assert backend choice persists across reloads`
+
 ## Branching
 
-`main` always green (builds clean; unit tests pass). One feature branch
-per phase (`phase/NN-name`), merged `--no-ff`.
-
-## What to read, in order
-
-1. This file (`CLAUDE.md`)
-2. `docs/OPERATING-CLAUDE-CODE.md` if copied in (Remote Control + budget
-   apply; the Linux-specific scheduling bits do not — this is Windows)
-3. `PLAN.md`
-4. `docs/BUILD-ENVIRONMENT.md` — toolchain, libwdi download + static build
-5. `docs/LIBWDI-API.md` — the wdi_* calls used
-6. `docs/RESTORE-STRATEGY.md` — before Phase 4 (the hard part)
+- `main` is always green (all tests pass; app builds).
+- Each phase from `PLAN.md` is a feature branch: `phase/NN-short-name`.
+- Merge with `--no-ff` after the phase's acceptance criteria pass.
+- Never force-push `main`.
 
 ## Out of scope (v0.1)
 
