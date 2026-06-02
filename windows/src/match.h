@@ -33,6 +33,17 @@ typedef struct {
 int vidpid_parse(const char *arg, unsigned short *vid, unsigned short *pid);
 
 /*
+ * hwid_matches_vidpid — test whether a Windows hardware-ID string contains
+ * VID_XXXX and PID_XXXX that match vid and pid (case-insensitive).
+ *
+ * Hardware IDs have the form "USB\VID_0403&PID_6015[&REV_...]"; this
+ * function finds the VID_ and PID_ fields anywhere in the string and checks
+ * them for strict equality (exactly 4 hex digits each). Returns 1 on match,
+ * 0 otherwise (including NULL or missing tags).
+ */
+int hwid_matches_vidpid(const char *hwid, unsigned short vid, unsigned short pid);
+
+/*
  * match_devices — collect indices of records matching vid AND pid exactly.
  *
  * Scans recs[0..n) for strict equality on both vid and pid.  Writes up to
