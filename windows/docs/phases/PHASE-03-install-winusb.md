@@ -46,12 +46,12 @@ freeing it for WebUSB / pyftdi.
 
 ## Acceptance
 
-- [ ] Non-elevated run errors cleanly with the exact elevated re-run
+- [x] Non-elevated run errors cleanly with the exact elevated re-run
       command (no crash, no partial action)
-- [ ] Elevated run installs WinUSB on exactly the matched device, nothing
+- [x] Elevated run installs WinUSB on exactly the matched device, nothing
       else
 - [ ] pyftdi / WebUSB can claim the device afterwards
-- [ ] `--dry-run` still changes nothing
+- [x] `--dry-run` still changes nothing
 - [ ] Branch merged to `main`
 
 ## Notes
@@ -59,5 +59,10 @@ freeing it for WebUSB / pyftdi.
 - libwdi can elevate its own installer, but we gate on our own elevation
   check first so the failure mode is a clear message, not a surprise UAC
   dialog mid-run.
+- libwdi emits `warning [wdi_prepare_driver] unsupported or no driver type
+  specified, will use Generic USB CDC` even when `WDI_WINUSB` is explicitly
+  set. This fires from `wdi_is_driver_supported()` returning false, but
+  libwdi still prepares and installs the WinUSB driver correctly. The
+  warning is a misleading string in libwdi and can be ignored.
 - This is the easy direction. Do not let its simplicity tempt a combined
   implementation with restore — restore is genuinely different (Phase 4).

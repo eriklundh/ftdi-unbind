@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
                 free_device_records(recs, n);
                 return 1;
             }
-            printf("  ok — device now presents as WinUSB\n");
+            printf("  ok; device now presents as WinUSB\n");
         }
         free_device_records(recs, n);
         return EXIT_OK;
