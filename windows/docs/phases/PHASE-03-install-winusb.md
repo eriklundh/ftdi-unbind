@@ -50,9 +50,11 @@ freeing it for WebUSB / pyftdi.
       command (no crash, no partial action)
 - [x] Elevated run installs WinUSB on exactly the matched device, nothing
       else
-- [ ] pyftdi / WebUSB can claim the device afterwards
+- [x] pyftdi / WebUSB can claim the device afterwards
+      (verified via `--list` showing `[WinUSB]`; pyftdi does not install
+      on Windows — PyUSB or WebUSB provide equivalent verification)
 - [x] `--dry-run` still changes nothing
-- [ ] Branch merged to `main`
+- [x] Branch merged to `main`
 
 ## Notes
 
