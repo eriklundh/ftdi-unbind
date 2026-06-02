@@ -45,5 +45,5 @@ foreach(_test match args)
     target_compile_options(test_${_test} PRIVATE
         $<$<C_COMPILER_ID:MSVC>:/UNDEBUG>
         $<$<NOT:$<C_COMPILER_ID:MSVC>>:-UNDEBUG>)
-    add_test(NAME ${_test} COMMAND test_${_test})
+    add_test(NAME ${_test} COMMAND $<TARGET_FILE:test_${_test}>)
 endforeach()
