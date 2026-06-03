@@ -13,8 +13,9 @@ human-gated integration tests against a real FT231X.
 4. Docs updated for any divergence.
 5. Branch merged to `main` with `--no-ff`.
 
-Phases 0–2 and 5 are fully buildable/testable by Claude Code without a
-device. Phases 3–4 need a human with the FT231X attached and admin.
+Phases 0–2, 6, and 7 are fully buildable/testable by Claude Code without
+a device. Phase 5 (ftdi-doctor) needs elevation but no device. Phases 3–4
+need a human with the FT231X attached and admin.
 
 ---
 
@@ -212,15 +213,64 @@ Acceptance:
 
 ---
 
-## Phase 5 — CLI parity audit and help text
+## Phase 5 — ftdi-doctor: driver store diagnosis and repair
 
-Branch: `phase/05-cli-parity`
+Branch: `phase/05-ftdi-doctor`
+
+**Goal:** `ftdi-doctor.exe` diagnoses and repairs the FTDI VCP driver
+store state — the failure mode behind `RESTORE_ERR_DRIVERLESS` when the
+CDM driver package is missing, corrupted, or blocked by a conflicting
+stale entry.
+
+This is a separate tool from `ftdi-bind` because it operates on the
+Windows driver store rather than a connected device, and often must run
+before the device is plugged in. See `docs/FTDI-DOCTOR.md` for strategy.
+
+Commands:
+- `ftdi-doctor --diagnose` — enumerate driver store packages and registry
+  entries matching FTDI/VCP hardware IDs; no mutations; no elevation
+  needed beyond driver store listing.
+- `ftdi-doctor --purge-store` — remove stale/conflicting FTDI `oem*.inf`
+  entries via `SetupUninstallOEMInf(..., SUOI_FORCEDELETE)`; requires
+  elevation; prepares the system for a clean CDM reinstall.
+- Both commands support `--dry-run` (show what would happen; no changes).
+
+Implementation approach:
+- Enumerate driver packages: walk `%SystemRoot%\INF\oem*.inf` and check
+  each with `SetupGetInfInformation` / `SetupFindFirstLine` for hardware
+  IDs matching `USB\VID_0403` (the approach `pnputil /enum-drivers` uses
+  internally). Print `oem*.inf` name, provider, driver version, and class.
+- Supplement with `SetupDiBuildDriverInfoList` to show which entry Windows
+  would actually pick for the connected hardware ID.
+- Remove: `SetupUninstallOEMInf(infFileName, SUOI_FORCEDELETE, NULL)`.
+
+Testability:
+- `--diagnose` and `--dry-run`: runnable by Claude Code autonomously
+  (reads driver store; no mutations; no device required).
+- `--purge-store`: human-gated (mutates driver store; requires elevation).
+
+Commits:
+- `docs(doctor): FTDI-DOCTOR.md — driver store diagnosis + repair strategy`
+- `feat(doctor): --diagnose enumerates FTDI oem*.inf driver store entries`
+- `feat(doctor): --purge-store removes stale FTDI INFs (SetupUninstallOEMInf)`
+- `feat(doctor): --dry-run for purge-store`
+
+Acceptance:
+- [ ] `--diagnose` lists FTDI `oem*.inf` entries without elevation;
+      output includes inf name, provider, driver version
+- [ ] `--purge-store --dry-run` shows what would be deleted, changes nothing
+- [ ] `--purge-store` (elevated) removes stale entries; CDM setup succeeds after
+- [ ] After `--purge-store` + CDM reinstall, `ftdi-bind 0403:6015`
+      restores the COM port
+
+---
+
+## Phase 6 — CLI parity audit and help text
+
+Branch: `phase/06-cli-parity`
 
 **Goal:** Verify flag/exit-code/help-text parity with the Linux
 `ftdi-unbind` / `ftdi-bind` scripts now that both exes exist.
-
-Note: the two-exe build moved to Phase 4. Phase 5 is now a parity audit
-and polish pass only — no structural changes needed.
 
 Steps:
 1. Flag/exit-code audit against the Linux scripts: `--dry-run`, `--all`,
@@ -239,23 +289,23 @@ Acceptance:
 
 ---
 
-## Phase 6 — Release
+## Phase 7 — Release
 
-Branch: `phase/06-release`
+Branch: `phase/07-release`
 
 Steps:
-1. `README.md`: what/why, the bind/unbind semantics, quick start, the
-   build-from-source steps (link to BUILD-ENVIRONMENT.md), the LGPL
+1. `README.md`: what/why, the bind/unbind/doctor semantics, quick start,
+   the build-from-source steps (link to BUILD-ENVIRONMENT.md), the LGPL
    relink note.
 2. `LICENSE`: GPLv3 (recommended for static LGPLv3 libwdi linking — see
    BUILD-ENVIRONMENT.md §licensing) or a permissive licence plus a
    documented relink path. Decide and be consistent.
 3. `CHANGELOG.md`; tag `v0.1.0`.
-4. Attach both `.exe`s (x64; ARM64 optional — libwdi 1.5.0 supports it).
+4. Attach all three `.exe`s (x64; ARM64 optional — libwdi 1.5.0 supports it).
 5. Confirm self-contained: `dumpbin /dependents` shows only system DLLs.
 
 Acceptance:
-- [ ] Fresh checkout builds both exes per the README on a clean VS box
+- [ ] Fresh checkout builds all exes per the README on a clean VS box
 - [ ] Exes are self-contained (no third-party DLLs)
 - [ ] `v0.1.0` tagged; binaries attached
 - [ ] README lets a contributor build from source in VSCode or VS
