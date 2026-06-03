@@ -303,9 +303,9 @@ Commits:
 - `fix(cli): align help text and exit codes with Linux tools`
 
 Acceptance:
-- [ ] Same flags, exit codes, VID:PID formats as `ftdi-(un)bind` scripts
-- [ ] `--help` reads consistently with the Linux tools
-- [ ] CTest covers the exit-code contract
+- [x] Same flags, exit codes, VID:PID formats as `ftdi-(un)bind` scripts
+- [x] `--help` reads consistently with the Linux tools
+- [x] CTest covers the exit-code contract (test_cli: 14 assertions, no admin)
 
 ---
 
