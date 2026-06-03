@@ -5,9 +5,11 @@
 #include "enum.h"
 #include "elevate.h"
 #include "install.h"
+#include "restore.h"
 
-/* Phase 5 will split this into main_unbind.c / main_bind.c. */
-#define ACTION_THIS  ACTION_UNBIND
+#ifndef ACTION_THIS
+#  error "ACTION_THIS must be defined by the build system (ACTION_UNBIND or ACTION_BIND)"
+#endif
 
 #define MAX_MATCHES  64
 
@@ -150,8 +152,21 @@ int main(int argc, char **argv) {
         return EXIT_OK;
     }
 
-    /* Phase 4: VCP restore not yet implemented */
-    fprintf(stderr, "error: VCP restore not yet implemented (Phase 4)\n");
-    free_device_records(recs, n);
-    return 1;
+    if (opt.action == ACTION_BIND) {
+        for (int i = 0; i < show; i++) {
+            int j = idx[i];
+            printf("restoring VCP driver on %04x:%04x  %s ...\n",
+                   recs[j].vid, recs[j].pid, recs[j].desc);
+            int rrc = restore_vcp(recs[j].vid, recs[j].pid,
+                                  recs[j].device_id);
+            if (rrc != RESTORE_OK) {
+                fprintf(stderr, "  error: %s\n", restore_strerror(rrc));
+                free_device_records(recs, n);
+                return 1;
+            }
+            printf("  ok; FTDI VCP driver restored, COM port should be back\n");
+        }
+        free_device_records(recs, n);
+        return EXIT_OK;
+    }
 }

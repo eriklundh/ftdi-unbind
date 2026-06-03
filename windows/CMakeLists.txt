@@ -33,12 +33,13 @@ target_link_libraries(ftdi-rebind-probe PRIVATE
 # extra dependencies so unit tests run without admin or hardware.
 add_library(ftdi_core OBJECT
     src/match.c
-    src/args.c)
+    src/args.c
+    src/comdb.c)
 target_include_directories(ftdi_core PUBLIC src)
 
 enable_testing()
 
-foreach(_test match args)
+foreach(_test match args restore comdb)
     add_executable(test_${_test} tests/test_${_test}.c)
     target_link_libraries(test_${_test} PRIVATE ftdi_core)
     # /UNDEBUG keeps assert() active even in Release so CTest catches failures.
@@ -53,20 +54,40 @@ endforeach()
 add_library(ftdi_enum OBJECT src/enum.c)
 target_include_directories(ftdi_enum PRIVATE src ${LIBWDI_INCLUDE_DIR})
 
-# Phase 3: elevation check + WinUSB install — needs Win32/libwdi but not the
-# pure core, so it lives in its own OBJECT lib.
-add_library(ftdi_install OBJECT
-    src/elevate.c
-    src/install.c)
+# Elevation check — pure Win32, no libwdi; shared by rebind exes and doctor.
+add_library(ftdi_elevate OBJECT src/elevate.c)
+target_include_directories(ftdi_elevate PRIVATE src)
+
+# Phase 3: WinUSB install — needs libwdi.
+add_library(ftdi_install OBJECT src/install.c)
 target_include_directories(ftdi_install PRIVATE src ${LIBWDI_INCLUDE_DIR})
 
-# Phase 2: ftdi-rebind exe wires enum + core into a runnable tool.
-# Phase 5 will split this into ftdi-unbind.exe / ftdi-bind.exe.
-add_executable(ftdi-rebind src/main.c)
-target_include_directories(ftdi-rebind PRIVATE src ${LIBWDI_INCLUDE_DIR})
-target_link_libraries(ftdi-rebind PRIVATE
-    ftdi_core
-    ftdi_enum
-    ftdi_install
-    ${LIBWDI_LIB}
-    setupapi cfgmgr32 ole32 newdev)
+# Phase 4: VCP restore — SetupAPI/CfgMgr32/newdev; no libwdi.
+# Depends on ftdi_core for hwid_matches_vidpid.
+add_library(ftdi_restore OBJECT src/restore.c)
+target_include_directories(ftdi_restore PRIVATE src)
+
+# Phase 4: two exes built from the same main.c; ACTION_THIS selects direction.
+set(_rebind_libs
+    ftdi_core ftdi_elevate ftdi_enum ftdi_install ftdi_restore
+    ${LIBWDI_LIB} setupapi cfgmgr32 ole32 newdev)
+
+add_executable(ftdi-unbind src/main.c)
+target_compile_definitions(ftdi-unbind PRIVATE ACTION_THIS=ACTION_UNBIND)
+target_include_directories(ftdi-unbind PRIVATE src ${LIBWDI_INCLUDE_DIR})
+target_link_libraries(ftdi-unbind PRIVATE ${_rebind_libs})
+
+add_executable(ftdi-bind src/main.c)
+target_compile_definitions(ftdi-bind PRIVATE ACTION_THIS=ACTION_BIND)
+target_include_directories(ftdi-bind PRIVATE src ${LIBWDI_INCLUDE_DIR})
+target_link_libraries(ftdi-bind PRIVATE ${_rebind_libs})
+
+# Phase 5: ftdi-doctor — ComDB + driver store repair; no libwdi.
+add_library(ftdi_comdb_win OBJECT src/comdb_win.c)
+target_include_directories(ftdi_comdb_win PRIVATE src)
+
+add_executable(ftdi-doctor src/doctor_main.c)
+target_include_directories(ftdi-doctor PRIVATE src)
+target_link_libraries(ftdi-doctor PRIVATE
+    ftdi_core ftdi_elevate ftdi_comdb_win
+    setupapi cfgmgr32)
