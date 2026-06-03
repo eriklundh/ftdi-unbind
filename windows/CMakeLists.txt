@@ -65,14 +65,17 @@ target_include_directories(ftdi_install PRIVATE src ${LIBWDI_INCLUDE_DIR})
 add_library(ftdi_restore OBJECT src/restore.c)
 target_include_directories(ftdi_restore PRIVATE src)
 
-# Phase 2: ftdi-rebind exe wires enum + core into a runnable tool.
-# Phase 5 will split this into ftdi-unbind.exe / ftdi-bind.exe.
-add_executable(ftdi-rebind src/main.c)
-target_include_directories(ftdi-rebind PRIVATE src ${LIBWDI_INCLUDE_DIR})
-target_link_libraries(ftdi-rebind PRIVATE
-    ftdi_core
-    ftdi_enum
-    ftdi_install
-    ftdi_restore
-    ${LIBWDI_LIB}
-    setupapi cfgmgr32 ole32 newdev)
+# Phase 4: two exes built from the same main.c; ACTION_THIS selects direction.
+set(_rebind_libs
+    ftdi_core ftdi_enum ftdi_install ftdi_restore
+    ${LIBWDI_LIB} setupapi cfgmgr32 ole32 newdev)
+
+add_executable(ftdi-unbind src/main.c)
+target_compile_definitions(ftdi-unbind PRIVATE ACTION_THIS=ACTION_UNBIND)
+target_include_directories(ftdi-unbind PRIVATE src ${LIBWDI_INCLUDE_DIR})
+target_link_libraries(ftdi-unbind PRIVATE ${_rebind_libs})
+
+add_executable(ftdi-bind src/main.c)
+target_compile_definitions(ftdi-bind PRIVATE ACTION_THIS=ACTION_BIND)
+target_include_directories(ftdi-bind PRIVATE src ${LIBWDI_INCLUDE_DIR})
+target_link_libraries(ftdi-bind PRIVATE ${_rebind_libs})

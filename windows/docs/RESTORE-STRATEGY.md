@@ -39,43 +39,45 @@ themselves are integration-only.
 
 ### 2. Remove the WinUSB association
 
-Two viable mechanisms; pick one and document the choice:
+**Chosen: `DiUninstallDevice`** (newdev.lib). It uninstalls the device's
+current driver (WinUSB) and removes the device node in one call. The
+subsequent re-scan then reinstalls the best available match.
 
-- **`DiUninstallDevice`** (newdev.lib) — uninstalls the device's current
-  driver (WinUSB) and the device node. Simple; the subsequent re-scan
-  reinstalls the best match.
-- **`SetupDiCallClassInstaller(DIF_REMOVE, ...)`** — lower-level removal.
+`SetupDiCallClassInstaller(DIF_REMOVE, ...)` is the lower-level
+alternative but offers no advantage here.
 
-Either way the goal is the same: drop the WinUSB binding.
+Capture `CM_Get_Parent` on the devnode *before* calling
+`DiUninstallDevice` — the devnode vanishes after the call and the parent
+DEVINST is needed for the re-enumeration step.
 
 ### 3. Re-trigger enumeration
 
+**Chosen: `CM_Reenumerate_DevNode` on the parent hub DEVINST.**
+
 ```c
-// Re-scan so Windows redetects the device and installs the best driver.
-DEVINST devinst; // obtain via CM_Locate_DevNode on the device-id, or the
-                 // parent hub's devinst
-CM_Reenumerate_DevNode(devinst, CM_REENUMERATE_NORMAL);
+DEVINST parentInst;
+CM_Get_Parent(&parentInst, devData.DevInst, 0);
+// ... DiUninstallDevice removes devData.DevInst ...
+CM_Reenumerate_DevNode(parentInst, CM_REENUMERATE_NORMAL);
 ```
 
-(`SetupDiCallClassInstaller(DIF_PROPERTYCHANGE)` with
-`DICS_PROPCHANGE`, or a full `CM_Reenumerate_DevNode` on the parent, are
-the common ways to force a re-scan. Settle on one in Phase 4 and note it
-here.)
+This asks the parent USB hub/controller to re-scan its ports, which
+causes Windows to redetect the device and install the best matching
+driver.
 
 ### 4. Verify — do not claim success blindly
 
 After the re-scan, **confirm the device came back with a working driver**
-before reporting success:
-- Re-enumerate and read the current `driver` / driver class of the
-  matched device.
-- Ideally confirm a COM port exists again (the device now has a
-  `Ports (COM & LPT)` class / a `PortName` in its registry key).
-- If the device returns **driverless** (no FTDI VCP available to
-  install), **fail loudly** with recovery guidance:
-  - replug the device,
-  - ensure the FTDI VCP driver is present (Windows Update online, or
-    install FTDI's CDM package once),
-  - or "Scan for hardware changes" in Device Manager.
+before reporting success. Implementation polls up to 5 s (10 × 500 ms):
+
+- Re-open `SetupDiGetClassDevs` and re-run the hardware-ID scan.
+- If the device reappears and `SPDRP_DRIVER` is non-empty → `RESTORE_OK`.
+- If the device reappears but `SPDRP_DRIVER` is empty → `RESTORE_ERR_DRIVERLESS`
+  (no FTDI VCP driver available to install); fail loudly with instructions:
+  - install the FTDI CDM package (ftdichip.com) or connect to Windows Update,
+  - then replug or run "Scan for hardware changes" in Device Manager.
+- If the device does not re-appear within 5 s → `RESTORE_ERR_NOENUM`;
+  advise replug.
 
 Never leave the user thinking the COM port is back when it isn't.
 
@@ -102,9 +104,22 @@ people don't run `ftdi-bind` needlessly.
 
 | Part | Testable how |
 |------|--------------|
-| Hardware-id VID:PID selection | **unit test** (pure string logic), test-first |
+| `hwid_matches_vidpid` string logic | **unit test** (`test_restore`, 14 assertions) |
 | Remove + re-enumerate + verify | **human-gated integration** on real FT231X |
 | "Came back driverless" detection | integration; assert the failure path reports clearly |
+
+Integration test command sequence (elevated prompt, FT231X plugged in):
+
+```
+ftdi-unbind.exe 0403:6015    # install WinUSB
+ftdi-bind.exe   0403:6015    # restore VCP
+# Verify: COM port returns; WinUSB node gone in Device Manager
+```
+
+Both `ftdi-unbind.exe` and `ftdi-bind.exe` are built from the same
+`src/main.c` with `ACTION_THIS` set per exe via a CMake compile definition.
+The two-exe build is part of Phase 4 (not Phase 5) because `ftdi-bind.exe`
+must exist before the integration test can run.
 
 This keeps the project's honest-TDD line: the selectable logic is unit
 tested; the system-mutating Win32 sequence is integration tested by a

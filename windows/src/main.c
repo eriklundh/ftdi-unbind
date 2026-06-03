@@ -7,8 +7,9 @@
 #include "install.h"
 #include "restore.h"
 
-/* Phase 5 will split this into main_unbind.c / main_bind.c. */
-#define ACTION_THIS  ACTION_UNBIND
+#ifndef ACTION_THIS
+#  error "ACTION_THIS must be defined by the build system (ACTION_UNBIND or ACTION_BIND)"
+#endif
 
 #define MAX_MATCHES  64
 

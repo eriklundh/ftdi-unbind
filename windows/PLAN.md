@@ -158,67 +158,84 @@ Branch: `phase/04-restore-vcp`
 
 **Goal:** `ftdi-bind.exe 0403:6015` removes the WinUSB association and
 gets Windows to reinstall the FTDI VCP driver, so the COM port returns.
-See `docs/RESTORE-STRATEGY.md` — design before coding.
+See `docs/RESTORE-STRATEGY.md`.
 
-Strategy (refined in the doc):
-1. Locate the device node by VID:PID via SetupAPI
-   (`SetupDiGetClassDevs` + enumerate + match hardware id).
-2. Remove the WinUSB driver association / uninstall the device node
-   (`DiUninstallDevice` or `SetupDiCallClassInstaller(DIF_REMOVE)`), then
-   re-trigger enumeration (`CM_Reenumerate_DevNode` on the parent, or
-   `cfgmgr32` re-scan) so Windows redetects and installs the best driver
-   (the in-box/Windows-Update FTDI VCP).
-3. **Verify** the device came back with a driver (and ideally a COM port);
-   if it came back driverless, report failure loudly with recovery hints
-   (replug, Windows Update, "Scan for hardware changes").
+The two-exe build is done in this phase (not Phase 5) because
+`ftdi-bind.exe` must exist before the integration test can run.
 
-Integration test (human, elevated): after Phase 3 unbind, run bind →
-confirm the COM port reappears and the WinUSB node is gone.
+Implementation:
+1. `hwid_matches_vidpid(hwid, vid, pid)` — pure function added to
+   `match.c`: finds `VID_XXXX&PID_XXXX` in a Windows hardware-ID string,
+   exactly 4 hex digits each, case-insensitive. Unit-tested in
+   `tests/test_restore.c` (14 assertions; runs without admin or hardware).
+2. `src/restore.c`: SetupAPI + CfgMgr32 restore flow:
+   - `SetupDiGetClassDevs("USB")` + SPDRP_HARDWAREID multi-sz scan via
+     `hwid_matches_vidpid` to locate the device node.
+   - `CM_Get_Parent` to capture the hub DEVINST before removal.
+   - `DiUninstallDevice` to drop the WinUSB binding and remove the node.
+   - `CM_Reenumerate_DevNode` on the parent to re-trigger enumeration.
+   - Poll up to 5 s (10 × 500 ms): device returns with driver →
+     `RESTORE_OK`; driverless → `RESTORE_ERR_DRIVERLESS` with actionable
+     recovery guidance; never re-enumerated → `RESTORE_ERR_NOENUM`.
+3. `src/main.c` takes `ACTION_THIS` as a compile-time define; CMake
+   builds `ftdi-unbind.exe` (`ACTION_THIS=ACTION_UNBIND`) and
+   `ftdi-bind.exe` (`ACTION_THIS=ACTION_BIND`) from the same source.
 
-Document the caveat: if the FTDI VCP driver isn't present on the system
-(no in-box, no Windows Update reach), reinstallation can't conjure it —
-the tool must say so rather than silently leaving it WinUSB or driverless.
+Integration test (human, elevated, real FT231X):
+
+```
+# From an elevated prompt, with the FT231X plugged in:
+ftdi-unbind.exe 0403:6015          # install WinUSB (Phase 3 flow)
+ftdi-bind.exe   0403:6015          # restore VCP (Phase 4 flow)
+# Confirm: COM port returns; WinUSB node gone in Device Manager
+```
+
+Caveat: if the FTDI VCP driver is not present on the system (no in-box
+driver, no Windows Update connectivity, never installed), re-enumeration
+cannot conjure it. The tool detects "driverless after re-enum" and reports
+`RESTORE_ERR_DRIVERLESS` with recovery instructions (install FTDI CDM
+package or connect to Windows Update, then replug).
 
 Commits:
-- `docs(restore): finalise the SetupAPI/CfgMgr restore strategy`
-- `test(restore): unit-test the device-node match/selection logic`
-- `feat(restore): locate device node by VID:PID (SetupAPI)`
-- `feat(restore): remove WinUSB + re-enumerate to reinstall VCP`
-- `feat(restore): verify a working driver returned; else fail loudly`
+- `test(restore): unit-test hwid_matches_vidpid (device-node selection)`
+- `feat(restore): locate devnode, remove WinUSB, re-enumerate, verify VCP`
+- `build(cli): build ftdi-unbind.exe and ftdi-bind.exe from shared main.c`
+- `docs(phase-04): record implementation choices and integration test`
 
 Acceptance:
-- [ ] After unbind→bind, the COM port returns and WinUSB node is gone
-- [ ] If no FTDI VCP is available to reinstall, the tool reports it
-      clearly and does not claim success
-- [ ] Device-node match logic has unit tests (the selectable pure part)
+- [x] Device-node match logic has unit tests (`ctest` green, no admin)
+- [x] `ftdi-unbind.exe` and `ftdi-bind.exe` both build from one `main.c`
+- [ ] Elevated: after `ftdi-unbind`, `ftdi-bind 0403:6015` restores the
+      COM port; WinUSB node gone in Device Manager
+- [ ] If no FTDI VCP driver is present, the tool reports clearly and does
+      not claim success
 
 ---
 
-## Phase 5 — Two exes, CLI parity, packaging-ready
+## Phase 5 — CLI parity audit and help text
 
-Branch: `phase/05-cli-two-exes`
+Branch: `phase/05-cli-parity`
 
-**Goal:** Ship `ftdi-unbind.exe` and `ftdi-bind.exe` as two thin mains
-over one shared core, with flags/exit codes identical to the Linux
-scripts.
+**Goal:** Verify flag/exit-code/help-text parity with the Linux
+`ftdi-unbind` / `ftdi-bind` scripts now that both exes exist.
+
+Note: the two-exe build moved to Phase 4. Phase 5 is now a parity audit
+and polish pass only — no structural changes needed.
 
 Steps:
-1. CMake: build `core` (static lib: match, enum, install, restore) once;
-   link into two exes with `src/main_unbind.c` and `src/main_bind.c`
-   that set the action.
-2. Flag/exit-code parity audit against the Linux scripts: `--dry-run`,
-   `--all`, `-h/--help`; exit 2 usage, 1 no-match/ambiguous, 0 ok.
-3. Help text mirroring the scripts' wording.
+1. Flag/exit-code audit against the Linux scripts: `--dry-run`, `--all`,
+   `-h/--help`; exit 2 usage, 1 no-match/ambiguous, 0 ok.
+2. Help text: tighten wording to mirror the Linux tools' phrasing.
+3. CTest: add exit-code tests (run the exes with bad args, check `$?`).
 
 Commits:
-- `refactor(core): extract shared core static lib`
-- `feat(cli): ftdi-unbind.exe and ftdi-bind.exe over shared core`
 - `test(cli): exit-code + flag parity with the Linux scripts`
+- `fix(cli): align help text and exit codes with Linux tools`
 
 Acceptance:
-- [ ] Both exes built from one core
 - [ ] Same flags, exit codes, VID:PID formats as `ftdi-(un)bind` scripts
 - [ ] `--help` reads consistently with the Linux tools
+- [ ] CTest covers the exit-code contract
 
 ---
 
