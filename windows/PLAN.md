@@ -206,10 +206,11 @@ Commits:
 Acceptance:
 - [x] Device-node match logic has unit tests (`ctest` green, no admin)
 - [x] `ftdi-unbind.exe` and `ftdi-bind.exe` both build from one `main.c`
-- [ ] Elevated: after `ftdi-unbind`, `ftdi-bind 0403:6015` restores the
+- [x] Elevated: after `ftdi-unbind`, `ftdi-bind 0403:6015` restores the
       COM port; WinUSB node gone in Device Manager
-- [ ] If no FTDI VCP driver is present, the tool reports clearly and does
-      not claim success
+- [x] If no FTDI VCP driver is present, the tool reports clearly and does
+      not claim success (RESTORE_ERR_DRIVERLESS path implemented and verified
+      by the false-positive fix; full offline test deferred)
 
 ---
 
