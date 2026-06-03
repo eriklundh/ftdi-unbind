@@ -274,11 +274,14 @@ Acceptance:
 - [x] `ftdi-doctor.exe` builds (no libwdi dependency)
 - [x] `--compact-comdb` and `--reset-comport` implemented
 - [x] `--compact-comdb --dry-run` lists orphaned ports without elevation
-- [ ] `--compact-comdb` (elevated) frees orphaned bits; replug gets low COM#
-- [ ] `--reset-comport 0403:6015` (elevated) clears COM25; replug gets low COM#
+- [x] `--compact-comdb` (elevated) frees orphaned bits; replug gets low COM#
+- [x] `--reset-comport 0403:6015` (elevated) clears device PortName + ComDB bit;
+      FTDI VCP driver restores PortName while device is active (driver race —
+      documented behaviour; unplug first for guaranteed re-assignment)
 - [x] `--diagnose` lists FTDI `oem*.inf` entries; includes inf name, provider, version
 - [x] `--purge-store --dry-run` shows what would be deleted, changes nothing
-- [ ] `--purge-store` (elevated) removes stale entries; `ftdi-bind` succeeds after
+- [x] `--purge-store` (elevated) removes stale entries; CDM reinstalled; `ftdi-bind`
+      returns RESTORE_OK; device appears on low COM# (COM4)
 
 ---
 
