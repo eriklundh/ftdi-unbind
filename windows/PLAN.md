@@ -228,40 +228,56 @@ before the device is plugged in. See `docs/FTDI-DOCTOR.md` for strategy.
 
 Commands:
 - `ftdi-doctor --diagnose` — enumerate driver store packages and registry
-  entries matching FTDI/VCP hardware IDs; no mutations; no elevation
-  needed beyond driver store listing.
-- `ftdi-doctor --purge-store` — remove stale/conflicting FTDI `oem*.inf`
-  entries via `SetupUninstallOEMInf(..., SUOI_FORCEDELETE)`; requires
-  elevation; prepares the system for a clean CDM reinstall.
-- Both commands support `--dry-run` (show what would happen; no changes).
+  entries matching FTDI/VCP hardware IDs; no mutations; no elevation needed.
+- `ftdi-doctor --purge-store [--dry-run]` — remove stale/conflicting FTDI
+  `oem*.inf` entries via `SetupUninstallOEMInf(..., SUOI_FORCEDELETE)`;
+  requires elevation; prepares the system for a clean CDM reinstall.
+- `ftdi-doctor --compact-comdb [--dry-run]` — prune orphaned COM port bits
+  from the `ComDB` bitmask (`HKLM\...\COM Name Arbiter`); clears every bit
+  whose port number is not in `HARDWARE\DEVICEMAP\SERIALCOMM`; requires
+  elevation. Fixes ever-increasing COM port numbers after many reinstalls.
+- `ftdi-doctor --reset-comport VID:PID [--dry-run]` — clear a single
+  device's `ComDB` bit and delete its `PortName` from the device registry;
+  requires elevation. Targeted alternative to `--compact-comdb`.
 
-Implementation approach:
-- Enumerate driver packages: walk `%SystemRoot%\INF\oem*.inf` and check
-  each with `SetupGetInfInformation` / `SetupFindFirstLine` for hardware
-  IDs matching `USB\VID_0403` (the approach `pnputil /enum-drivers` uses
-  internally). Print `oem*.inf` name, provider, driver version, and class.
-- Supplement with `SetupDiBuildDriverInfoList` to show which entry Windows
-  would actually pick for the connected hardware ID.
-- Remove: `SetupUninstallOEMInf(infFileName, SUOI_FORCEDELETE, NULL)`.
+Implementation:
+- `src/comdb.c` + `src/comdb.h` — pure ComDB bit logic in `ftdi_core`
+  (unit-testable, no Win32 driver APIs).
+- `src/comdb_win.c` + `src/comdb_win.h` — Win32 registry layer:
+  `comdb_read/write` (COM Name Arbiter), `comdb_active_ports` (SERIALCOMM),
+  `comdb_device_portname` / `comdb_clear_device_portname` (SetupAPI +
+  `SetupDiOpenDevRegKey`).
+- `src/elevate.c` extracted from `ftdi_install` into its own `ftdi_elevate`
+  OBJECT lib so `ftdi-doctor` does not need libwdi.
+- `src/doctor_main.c` — arg parsing + dispatch for all four commands.
+- `--diagnose` + `--purge-store`: driver store enumeration via SetupAPI
+  `SetupGetInfInformation` / `SetupFindFirstLine` on `oem*.inf` files.
 
 Testability:
-- `--diagnose` and `--dry-run`: runnable by Claude Code autonomously
-  (reads driver store; no mutations; no device required).
-- `--purge-store`: human-gated (mutates driver store; requires elevation).
+- `--diagnose`, `--dry-run`, `--compact-comdb --dry-run`: autonomous
+  (reads only; no mutations; no device required).
+- `--purge-store`, `--compact-comdb`, `--reset-comport`: human-gated
+  (mutate driver store / registry; require elevation).
 
 Commits:
-- `docs(doctor): FTDI-DOCTOR.md — driver store diagnosis + repair strategy`
+- `docs(doctor): FTDI-DOCTOR.md — driver store + COM port repair strategy`
+- `test(comdb): unit-test ComDB bit logic (port parse, set/clear, count)`
+- `feat(comdb): implement pure ComDB bit manipulation (comdb.c)`
+- `feat(doctor): --compact-comdb prunes orphaned COM port bits from ComDB`
+- `feat(doctor): --reset-comport VID:PID clears device PortName + ComDB bit`
 - `feat(doctor): --diagnose enumerates FTDI oem*.inf driver store entries`
 - `feat(doctor): --purge-store removes stale FTDI INFs (SetupUninstallOEMInf)`
-- `feat(doctor): --dry-run for purge-store`
 
 Acceptance:
-- [ ] `--diagnose` lists FTDI `oem*.inf` entries without elevation;
-      output includes inf name, provider, driver version
+- [x] ComDB bit logic has unit tests (`test_comdb`, 23 assertions, no admin)
+- [x] `ftdi-doctor.exe` builds (no libwdi dependency)
+- [x] `--compact-comdb` and `--reset-comport` implemented
+- [ ] `--compact-comdb --dry-run` lists orphaned ports without elevation
+- [ ] `--compact-comdb` (elevated) frees orphaned bits; replug gets low COM#
+- [ ] `--reset-comport 0403:6015` (elevated) clears COM25; replug gets low COM#
+- [ ] `--diagnose` lists FTDI `oem*.inf` entries; includes inf name, provider, version
 - [ ] `--purge-store --dry-run` shows what would be deleted, changes nothing
-- [ ] `--purge-store` (elevated) removes stale entries; CDM setup succeeds after
-- [ ] After `--purge-store` + CDM reinstall, `ftdi-bind 0403:6015`
-      restores the COM port
+- [ ] `--purge-store` (elevated) removes stale entries; `ftdi-bind` succeeds after
 
 ---
 

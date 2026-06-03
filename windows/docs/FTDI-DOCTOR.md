@@ -112,17 +112,56 @@ in the tool's output before deletion and require the user to pass `--yes`
 | `--dry-run` | autonomous (reads only) |
 | `--purge-store` | **human-gated** (mutates driver store; requires elevation) |
 | CDM reinstall after purge | human-gated |
+| `comdb_is_allocated`, `comdb_clear_port`, `comdb_port_from_name` | **unit test** (`test_comdb`, 23 assertions) |
+| `--compact-comdb --dry-run` | autonomous (reads ComDB; no mutations) |
+| `--compact-comdb` | **human-gated** (writes ComDB; requires elevation) |
+| `--reset-comport` | **human-gated** (writes ComDB + device registry; requires elevation) |
 
-## Known symptom pattern
+## Known symptom pattern — driver store collision
 
 The failure mode that prompted this tool on the development machine:
 - `ftdi-bind` reports `RESTORE_ERR_DRIVERLESS` after every unbind.
 - `CDM2123620_Setup.exe` runs without a visible error dialog but the
   driver is not installed (or appears installed but does not take effect).
-- `pnputil /enum-drivers` (or `ftdi-doctor --diagnose`) reveals stale
-  `oem*.inf` entries from a previous CDM install that were never cleaned up.
-- Fix: `ftdi-doctor --purge-store`, then CDM, then replug.
+- `pnputil /enum-drivers` reveals stale `oem*.inf` entries from libwdi
+  never cleaned up after previous unbind sessions, including entries that
+  wrongly claim the Ports class GUID for a WinUSB driver file. These
+  "win" the driver selection race over the real CDM pair.
+- Confirmed entries on the development machine: oem292, oem385, oem430,
+  oem431, oem472, oem473, oem474 (all libwdi-generated). Real CDM pair:
+  oem502 (ftdibus.inf), oem503 (ftdiport.inf).
+- Fix: `pnputil /delete-driver oem*.inf /force` for all libwdi entries,
+  then replug — CDM was already healthy, no reinstall needed.
+- Future fix: `ftdi-doctor --purge-store`, then replug.
 
-This is a widely-reported, well-understood Windows FTDI driver state
-problem. `ftdi-doctor` exists to replace the manual `pnputil` dance with
-a strict, VID:PID-scoped CLI that explains what it finds and why.
+## Known symptom pattern — COM port number accumulation
+
+Windows never automatically frees COM port numbers from the `ComDB`
+bitmask. Each reinstall (unbind→bind cycle) consumes a new bit. After
+many cycles the device reaches COM25, COM30, etc.
+
+Registry location: `HKLM\SYSTEM\CurrentControlSet\Control\COM Name Arbiter`
+Value: `ComDB` REG_BINARY (32 bytes). Bit N-1 = COM port N (LSB first).
+
+Active ports (currently live) can be read from:
+`HKLM\HARDWARE\DEVICEMAP\SERIALCOMM` — one value per active serial device.
+
+Per-device assignment: `PortName` REG_SZ under the device's
+`Device Parameters` registry key (opened via `SetupDiOpenDevRegKey`).
+
+Fix workflow:
+1. `ftdi-doctor --compact-comdb --dry-run` — see orphaned ports.
+2. `ftdi-doctor --compact-comdb` (elevated) — prune orphaned bits.
+3. Replug FTDI device → Windows assigns a low COM port number.
+
+Or for a targeted single-device fix:
+1. `ftdi-doctor --reset-comport 0403:6015` (elevated) — clear the FTDI
+   device's ComDB bit and delete its `PortName` from the device registry.
+2. Replug → gets a fresh, low port number.
+
+Note: `--compact-comdb` does NOT affect ports claimed by other active
+devices (printers, Bluetooth, LTE modems, etc.). Only orphaned bits
+(allocated in ComDB but not present in SERIALCOMM) are cleared.
+
+This is widely reported for any USB serial device that gets reinstalled
+repeatedly on Windows. `ftdi-doctor` automates the manual `regedit` fix.
