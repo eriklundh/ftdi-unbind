@@ -119,12 +119,35 @@ static int cmd_reset_comport(const char *vidpid_str, int dry_run) {
         return 1;
     }
 
-    printf("[%s] %04x:%04x  current port: %s (COM%d in ComDB)\n",
-           dry_run ? "dry-run" : "reset", vid, pid, portname, port);
+    /*
+     * Check whether the device's COM port is currently active.
+     * HARDWARE\DEVICEMAP\SERIALCOMM lists every live serial port.
+     * If the port is active we must NOT clear the ComDB bit while it is in
+     * use — that creates a window where another device could be assigned the
+     * same number.  Instead, only delete PortName so the next replug gets a
+     * new assignment; the ComDB bit cleans up naturally via --compact-comdb
+     * after replug.
+     */
+    int active_ports[MAX_PORTS];
+    int nactive = comdb_active_ports(active_ports, MAX_PORTS);
+    int currently_active = 0;
+    for (int i = 0; i < nactive; i++) {
+        if (active_ports[i] == port) { currently_active = 1; break; }
+    }
+
+    printf("[%s] %04x:%04x  current port: %s  status: %s\n",
+           dry_run ? "dry-run" : "reset", vid, pid, portname,
+           currently_active ? "active (device is plugged in)"
+                            : "inactive (device is unplugged)");
 
     if (dry_run) {
-        printf("[dry-run] would clear COM%d from ComDB and delete "
-               "PortName from device registry. No changes made.\n", port);
+        if (currently_active)
+            printf("[dry-run] would delete PortName only (ComDB bit kept "
+                   "while active). Replug to complete.\n");
+        else
+            printf("[dry-run] would clear COM%d from ComDB and delete "
+                   "PortName from device registry.\n", port);
+        printf("[dry-run] no changes made.\n");
         return 0;
     }
 
@@ -133,29 +156,41 @@ static int cmd_reset_comport(const char *vidpid_str, int dry_run) {
         return 1;
     }
 
-    /* Clear the ComDB bit. */
-    unsigned char buf[COMDB_SIZE];
-    rc = comdb_read(buf);
-    if (rc != 0) {
-        fprintf(stderr, "error: cannot read ComDB (error %d)\n", rc);
-        return 1;
-    }
-    comdb_clear_port(buf, port);
-    rc = comdb_write(buf);
-    if (rc != 0) {
-        fprintf(stderr, "error: cannot write ComDB (error %d)\n", rc);
-        return 1;
-    }
-
-    /* Delete the PortName from the device's Device Parameters key. */
+    /* Always delete PortName so the next enumeration picks a fresh number. */
     rc = comdb_clear_device_portname(vid, pid);
     if (rc != 0) {
-        fprintf(stderr, "warning: cleared ComDB but could not delete "
-                "PortName from device registry (error %d)\n", rc);
+        fprintf(stderr, "error: could not delete PortName from device "
+                "registry (error %d)\n", rc);
+        return 1;
     }
 
-    printf("Cleared %s from ComDB and device registry. "
-           "Next replug will get a lower port number.\n", portname);
+    if (currently_active) {
+        /*
+         * Leave the ComDB bit set while the port is live to prevent
+         * double-assignment.  The bit becomes orphaned after replug and
+         * will be swept by the next --compact-comdb run.
+         */
+        printf("Deleted PortName for %s. ComDB bit kept while port is active.\n"
+               "Unplug and replug the device — it will get a lower port number.\n"
+               "Run --compact-comdb afterwards to free the old %s slot.\n",
+               portname, portname);
+    } else {
+        /* Device is not active: safe to clear the ComDB bit immediately. */
+        unsigned char buf[COMDB_SIZE];
+        rc = comdb_read(buf);
+        if (rc != 0) {
+            fprintf(stderr, "error: cannot read ComDB (error %d)\n", rc);
+            return 1;
+        }
+        comdb_clear_port(buf, port);
+        rc = comdb_write(buf);
+        if (rc != 0) {
+            fprintf(stderr, "error: cannot write ComDB (error %d)\n", rc);
+            return 1;
+        }
+        printf("Cleared %s from ComDB and device registry. "
+               "Next replug will get a lower port number.\n", portname);
+    }
     return 0;
 }
 
