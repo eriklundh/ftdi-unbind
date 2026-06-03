@@ -13,14 +13,17 @@
 
 #define MAX_MATCHES  64
 
+#define ABOUT_TEXT "(c) 2026 Erik Lundh - The Joy of Engineering Compelcon AB\n"
+
 static void print_usage(const char *prog) {
     fprintf(stderr,
-        "Usage: %s [--list] [--dry-run] [--all] [-h] VID:PID\n"
+        "Usage: %s [--list] [--dry-run] [--all] [-h] [--about] VID:PID\n"
         "\n"
         "  --list      list all USB devices and their current driver\n"
         "  --dry-run   show which device(s) would be acted on; change nothing\n"
         "  --all       act on all matching devices (overrides ambiguity check)\n"
         "  -h/--help   show this help\n"
+        "  --about     show copyright information\n"
         "\n"
         "  VID:PID  accepted forms: 0403:6015  0x0403:0x6015  403:6015\n",
         prog);
@@ -54,6 +57,10 @@ int main(int argc, char **argv) {
 
     if (opt.help) {
         print_usage(argv[0]);
+        return EXIT_OK;
+    }
+    if (opt.about) {
+        printf(ABOUT_TEXT);
         return EXIT_OK;
     }
     if (rc == EXIT_USAGE) {
