@@ -91,3 +91,16 @@ target_include_directories(ftdi-doctor PRIVATE src)
 target_link_libraries(ftdi-doctor PRIVATE
     ftdi_core ftdi_elevate ftdi_comdb_win
     setupapi cfgmgr32)
+
+# Phase 6: CLI exit-code parity tests — spawn each exe and check the exit code.
+# Exe paths injected via compile definitions so the test is device- and admin-free.
+add_executable(test_cli tests/test_cli.c)
+target_compile_definitions(test_cli PRIVATE
+    UNBIND_EXE="$<TARGET_FILE:ftdi-unbind>"
+    BIND_EXE="$<TARGET_FILE:ftdi-bind>"
+    DOCTOR_EXE="$<TARGET_FILE:ftdi-doctor>")
+target_compile_options(test_cli PRIVATE
+    $<$<C_COMPILER_ID:MSVC>:/UNDEBUG>
+    $<$<NOT:$<C_COMPILER_ID:MSVC>>:-UNDEBUG>)
+add_dependencies(test_cli ftdi-unbind ftdi-bind ftdi-doctor)
+add_test(NAME cli COMMAND $<TARGET_FILE:test_cli>)
