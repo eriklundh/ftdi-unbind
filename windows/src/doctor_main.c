@@ -1,3 +1,6 @@
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <setupapi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,22 +9,203 @@
 #include "comdb_win.h"
 #include "elevate.h"
 
-#define MAX_PORTS 256
+#define MAX_PORTS    256
+#define MAX_INF      128
+
+/* ── INF entry ───────────────────────────────────────────────────────── */
+
+typedef struct {
+    char name[64];          /* "oem42.inf" */
+    char provider[256];
+    char driver_ver[64];    /* "date,version" */
+    char class_name[64];
+} ftdi_inf_t;
+
+/* Raw-text search for needle in a file; case-insensitive. */
+static int file_contains_nocase(const char *path, const char *needle)
+{
+    static char buf[65536];
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    buf[n] = '\0';
+
+    size_t nlen = strlen(needle);
+    for (size_t i = 0; i + nlen <= n; i++) {
+        if (_strnicmp(buf + i, needle, nlen) == 0) return 1;
+    }
+    return 0;
+}
+
+/* Read [Version] Provider/DriverVer/Class from an INF; returns 0 on success. */
+static int read_inf_version(const char *full_path, ftdi_inf_t *out)
+{
+    HINF hinf = SetupOpenInfFileA(full_path, NULL, INF_STYLE_WIN4, NULL);
+    if (hinf == INVALID_HANDLE_VALUE) return -1;
+
+    INFCONTEXT ctx;
+    char date[32] = {0}, ver[32] = {0};
+
+    if (SetupFindFirstLineA(hinf, "Version", "Provider", &ctx))
+        SetupGetStringFieldA(&ctx, 1, out->provider,   sizeof(out->provider),   NULL);
+    if (SetupFindFirstLineA(hinf, "Version", "DriverVer", &ctx)) {
+        SetupGetStringFieldA(&ctx, 1, date, sizeof(date), NULL);
+        SetupGetStringFieldA(&ctx, 2, ver,  sizeof(ver),  NULL);
+        if (date[0] && ver[0])
+            snprintf(out->driver_ver, sizeof(out->driver_ver), "%s,%s", date, ver);
+        else if (date[0])
+            snprintf(out->driver_ver, sizeof(out->driver_ver), "%s", date);
+    }
+    if (SetupFindFirstLineA(hinf, "Version", "Class", &ctx))
+        SetupGetStringFieldA(&ctx, 1, out->class_name, sizeof(out->class_name), NULL);
+
+    SetupCloseInfFile(hinf);
+    return 0;
+}
+
+/*
+ * Walk %SystemRoot%\INF\oem*.inf; collect entries that mention VID_0403.
+ * Returns the count written into entries[].
+ */
+static int scan_ftdi_oem_infs(ftdi_inf_t *entries, int max)
+{
+    char inf_dir[MAX_PATH];
+    DWORD n = GetEnvironmentVariableA("SystemRoot", inf_dir, sizeof(inf_dir));
+    if (!n || n >= sizeof(inf_dir)) {
+        fprintf(stderr, "error: cannot determine %%SystemRoot%%\n");
+        return 0;
+    }
+    strncat_s(inf_dir, sizeof(inf_dir), "\\INF", _TRUNCATE);
+
+    char pattern[MAX_PATH];
+    snprintf(pattern, sizeof(pattern), "%s\\oem*.inf", inf_dir);
+
+    WIN32_FIND_DATAA fd;
+    HANDLE hf = FindFirstFileA(pattern, &fd);
+    if (hf == INVALID_HANDLE_VALUE) return 0;
+
+    int count = 0;
+    do {
+        if (count >= max) break;
+        char full[MAX_PATH];
+        snprintf(full, sizeof(full), "%s\\%s", inf_dir, fd.cFileName);
+        if (!file_contains_nocase(full, "VID_0403")) continue;
+
+        ftdi_inf_t *e = &entries[count];
+        memset(e, 0, sizeof(*e));
+        snprintf(e->name, sizeof(e->name), "%s", fd.cFileName);
+        read_inf_version(full, e);
+        count++;
+    } while (FindNextFileA(hf, &fd));
+    FindClose(hf);
+    return count;
+}
+
+/* ── print_usage ─────────────────────────────────────────────────────── */
 
 static void print_usage(const char *prog) {
     fprintf(stderr,
         "Usage: %s <command> [options]\n"
         "\n"
         "Commands:\n"
+        "  --diagnose               list FTDI oem*.inf driver store entries (no mutations)\n"
+        "  --purge-store            remove stale FTDI oem*.inf entries (requires --yes)\n"
         "  --compact-comdb          prune orphaned COM port bits from ComDB\n"
         "  --reset-comport VID:PID  clear a device's PortName and ComDB bit\n"
         "\n"
         "Options:\n"
         "  --dry-run   show what would change; mutate nothing\n"
+        "  --yes       confirm destructive operations (required by --purge-store)\n"
         "  -h/--help   show this help\n"
         "\n"
         "  VID:PID  accepted forms: 0403:6015  0x0403:0x6015  403:6015\n",
         prog);
+}
+
+/* ── --diagnose ──────────────────────────────────────────────────────── */
+
+static int cmd_diagnose(void) {
+    ftdi_inf_t entries[MAX_INF];
+    int n = scan_ftdi_oem_infs(entries, MAX_INF);
+
+    if (n == 0) {
+        printf("No FTDI driver store entries found (VID_0403).\n");
+        return 0;
+    }
+
+    printf("Found %d FTDI driver store entr%s:\n\n", n, n == 1 ? "y" : "ies");
+    for (int i = 0; i < n; i++) {
+        printf("  %-14s  provider: %-24s  ver: %-22s  class: %s\n",
+               entries[i].name,
+               entries[i].provider[0]   ? entries[i].provider   : "(none)",
+               entries[i].driver_ver[0] ? entries[i].driver_ver : "(none)",
+               entries[i].class_name[0] ? entries[i].class_name : "(none)");
+    }
+    printf("\nRun 'ftdi-doctor --purge-store --dry-run' to preview removal.\n");
+    return 0;
+}
+
+/* ── --purge-store ───────────────────────────────────────────────────── */
+
+static int cmd_purge_store(int dry_run, int yes) {
+    ftdi_inf_t entries[MAX_INF];
+    int n = scan_ftdi_oem_infs(entries, MAX_INF);
+
+    if (n == 0) {
+        printf("No FTDI driver store entries found. Nothing to purge.\n");
+        return 0;
+    }
+
+    printf("Found %d FTDI driver store entr%s to remove:\n\n",
+           n, n == 1 ? "y" : "ies");
+    for (int i = 0; i < n; i++) {
+        printf("  %-14s  provider: %-24s  ver: %-22s  class: %s\n",
+               entries[i].name,
+               entries[i].provider[0]   ? entries[i].provider   : "(none)",
+               entries[i].driver_ver[0] ? entries[i].driver_ver : "(none)",
+               entries[i].class_name[0] ? entries[i].class_name : "(none)");
+    }
+    printf("\n");
+
+    if (dry_run) {
+        printf("[dry-run] no changes made.\n");
+        return 0;
+    }
+
+    if (!yes) {
+        printf(
+            "WARNING: This removes ALL FTDI VCP oem*.inf entries, including\n"
+            "any that work for other FTDI devices on this system. After purging,\n"
+            "reinstall the FTDI CDM package (ftdichip.com) before replugging.\n"
+            "Pass --yes to confirm deletion.\n");
+        return 1;
+    }
+
+    if (!is_elevated()) {
+        fprintf(stderr,
+            "error: administrator privileges required to remove driver store entries.\n");
+        return 1;
+    }
+
+    int removed = 0, failed = 0;
+    for (int i = 0; i < n; i++) {
+        if (SetupUninstallOEMInfA(entries[i].name, SUOI_FORCEDELETE, NULL)) {
+            printf("  Removed: %s\n", entries[i].name);
+            removed++;
+        } else {
+            fprintf(stderr, "  Failed:  %s (error %lu)\n",
+                    entries[i].name, (unsigned long)GetLastError());
+            failed++;
+        }
+    }
+
+    printf("\nRemoved %d, failed %d.\n", removed, failed);
+    if (removed > 0) {
+        printf("Reinstall the FTDI CDM package (ftdichip.com), then replug\n"
+               "the device and run 'ftdi-bind 0403:6015' to restore the COM port.\n");
+    }
+    return failed ? 1 : 0;
 }
 
 /* ── --compact-comdb ─────────────────────────────────────────────────── */
@@ -34,11 +218,9 @@ static int cmd_compact_comdb(int dry_run) {
         return 1;
     }
 
-    /* Collect active COM port numbers from HARDWARE\DEVICEMAP\SERIALCOMM. */
     int active[MAX_PORTS];
     int nactive = comdb_active_ports(active, MAX_PORTS);
 
-    /* Find orphaned bits: allocated in ComDB but not in the active set. */
     int orphaned[MAX_PORTS];
     int norphaned = 0;
     for (int port = 1; port <= COMDB_MAX_PORT; port++) {
@@ -80,7 +262,6 @@ static int cmd_compact_comdb(int dry_run) {
         return 1;
     }
 
-    /* Find the new lowest free port. */
     int lowest_free = 0;
     for (int p = 1; p <= COMDB_MAX_PORT; p++) {
         if (!comdb_is_allocated(buf, p)) { lowest_free = p; break; }
@@ -101,7 +282,6 @@ static int cmd_reset_comport(const char *vidpid_str, int dry_run) {
         return 2;
     }
 
-    /* Find the device's current PortName. */
     char portname[64] = {0};
     int rc = comdb_device_portname(vid, pid, portname, sizeof(portname));
     if (rc != 0) {
@@ -121,12 +301,10 @@ static int cmd_reset_comport(const char *vidpid_str, int dry_run) {
 
     /*
      * Check whether the device's COM port is currently active.
-     * HARDWARE\DEVICEMAP\SERIALCOMM lists every live serial port.
-     * If the port is active we must NOT clear the ComDB bit while it is in
-     * use — that creates a window where another device could be assigned the
-     * same number.  Instead, only delete PortName so the next replug gets a
-     * new assignment; the ComDB bit cleans up naturally via --compact-comdb
-     * after replug.
+     * If active, do NOT clear the ComDB bit — that creates a window where
+     * another device could be assigned the same number. Delete PortName
+     * only; the ComDB bit becomes orphaned after replug and is swept by
+     * the next --compact-comdb run.
      */
     int active_ports[MAX_PORTS];
     int nactive = comdb_active_ports(active_ports, MAX_PORTS);
@@ -156,7 +334,6 @@ static int cmd_reset_comport(const char *vidpid_str, int dry_run) {
         return 1;
     }
 
-    /* Always delete PortName so the next enumeration picks a fresh number. */
     rc = comdb_clear_device_portname(vid, pid);
     if (rc != 0) {
         fprintf(stderr, "error: could not delete PortName from device "
@@ -165,17 +342,11 @@ static int cmd_reset_comport(const char *vidpid_str, int dry_run) {
     }
 
     if (currently_active) {
-        /*
-         * Leave the ComDB bit set while the port is live to prevent
-         * double-assignment.  The bit becomes orphaned after replug and
-         * will be swept by the next --compact-comdb run.
-         */
         printf("Deleted PortName for %s. ComDB bit kept while port is active.\n"
-               "Unplug and replug the device — it will get a lower port number.\n"
+               "Unplug and replug the device -- it will get a lower port number.\n"
                "Run --compact-comdb afterwards to free the old %s slot.\n",
                portname, portname);
     } else {
-        /* Device is not active: safe to clear the ComDB bit immediately. */
         unsigned char buf[COMDB_SIZE];
         rc = comdb_read(buf);
         if (rc != 0) {
@@ -198,12 +369,19 @@ static int cmd_reset_comport(const char *vidpid_str, int dry_run) {
 
 int main(int argc, char **argv) {
     int dry_run = 0;
+    int yes     = 0;
     const char *command = NULL;
     const char *vidpid  = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--dry-run") == 0) {
             dry_run = 1;
+        } else if (strcmp(argv[i], "--yes") == 0) {
+            yes = 1;
+        } else if (strcmp(argv[i], "--diagnose") == 0) {
+            command = "diagnose";
+        } else if (strcmp(argv[i], "--purge-store") == 0) {
+            command = "purge-store";
         } else if (strcmp(argv[i], "--compact-comdb") == 0) {
             command = "compact-comdb";
         } else if (strcmp(argv[i], "--reset-comport") == 0) {
@@ -224,6 +402,12 @@ int main(int argc, char **argv) {
         print_usage(argv[0]);
         return 2;
     }
+
+    if (strcmp(command, "diagnose") == 0)
+        return cmd_diagnose();
+
+    if (strcmp(command, "purge-store") == 0)
+        return cmd_purge_store(dry_run, yes);
 
     if (strcmp(command, "compact-comdb") == 0)
         return cmd_compact_comdb(dry_run);
