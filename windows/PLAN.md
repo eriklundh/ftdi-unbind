@@ -273,11 +273,11 @@ Acceptance:
 - [x] ComDB bit logic has unit tests (`test_comdb`, 23 assertions, no admin)
 - [x] `ftdi-doctor.exe` builds (no libwdi dependency)
 - [x] `--compact-comdb` and `--reset-comport` implemented
-- [ ] `--compact-comdb --dry-run` lists orphaned ports without elevation
+- [x] `--compact-comdb --dry-run` lists orphaned ports without elevation
 - [ ] `--compact-comdb` (elevated) frees orphaned bits; replug gets low COM#
 - [ ] `--reset-comport 0403:6015` (elevated) clears COM25; replug gets low COM#
-- [ ] `--diagnose` lists FTDI `oem*.inf` entries; includes inf name, provider, version
-- [ ] `--purge-store --dry-run` shows what would be deleted, changes nothing
+- [x] `--diagnose` lists FTDI `oem*.inf` entries; includes inf name, provider, version
+- [x] `--purge-store --dry-run` shows what would be deleted, changes nothing
 - [ ] `--purge-store` (elevated) removes stale entries; `ftdi-bind` succeeds after
 
 ---
