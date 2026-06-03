@@ -15,7 +15,10 @@ human-gated integration tests against a real FT231X.
 
 Phases 0–2, 6, and 7 are fully buildable/testable by Claude Code without
 a device. Phase 5 (ftdi-doctor) needs elevation but no device. Phases 3–4
-need a human with the FT231X attached and admin.
+need a human with the FT231X attached and admin. Phases 8–10 (signing) are
+human-gated for the Azure-side setup; Claude Code authors the scripts and
+workflows but never holds the signing identity (see each phase's autonomy
+note and `docs/SIGNING-AZURE-ARTIFACT.md`).
 
 ---
 
@@ -309,23 +312,201 @@ Acceptance:
 
 ---
 
-## Phase 7 — Release
+## Phase 7 — Release (unsigned v0.1.0)
 
 Branch: `phase/07-release`
+
+**Goal:** Ship a usable v0.1.0 **unsigned**, exactly as `SIGNING.md`'s v0.1
+stance prescribes: the tools function unsigned, signing is about trust not
+behaviour, and the release workflow is built so turning signing on later
+(Phases 8–10) is purely additive — no rewrite. Document the SmartScreen
+click-through so users can run the binaries today.
 
 Steps:
 1. `README.md`: what/why, the bind/unbind/doctor semantics, quick start,
    the build-from-source steps (link to BUILD-ENVIRONMENT.md), the LGPL
-   relink note.
+   relink note, and a short "Why does Windows warn about these binaries?"
+   section pointing at the SmartScreen click-through (More info → Run
+   anyway) until signing lands.
 2. `LICENSE`: GPLv3 (recommended for static LGPLv3 libwdi linking — see
    BUILD-ENVIRONMENT.md §licensing) or a permissive licence plus a
-   documented relink path. Decide and be consistent.
+   documented relink path. Decide and be consistent. (Note: a GPL/OSS
+   licence is also what would later qualify the project for Certum Open
+   Source signing, the documented forker path in `SIGNING.md`.)
 3. `CHANGELOG.md`; tag `v0.1.0`.
 4. Attach all three `.exe`s (x64; ARM64 optional — libwdi 1.5.0 supports it).
 5. Confirm self-contained: `dumpbin /dependents` shows only system DLLs.
+6. Author `.github/workflows/release.yml` that builds and attaches the exes
+   on a tag, with the signing step **already present but gated off** (no-ops
+   when signing secrets are absent — see Phase 9). This is the "sign if
+   secrets present" skeleton from `SIGNING.md`; v0.1.0 ships through it
+   unsigned.
+
+Autonomy: fully Claude Code (no device, no admin, no signing identity).
 
 Acceptance:
 - [ ] Fresh checkout builds all exes per the README on a clean VS box
 - [ ] Exes are self-contained (no third-party DLLs)
-- [ ] `v0.1.0` tagged; binaries attached
+- [ ] `v0.1.0` tagged; binaries attached (unsigned)
 - [ ] README lets a contributor build from source in VSCode or VS
+- [ ] README documents the SmartScreen click-through for unsigned binaries
+- [ ] `release.yml` builds + attaches exes; signing step present but inert
+
+---
+
+## Phase 8 — Local Authenticode signing on the build laptop (human-gated)
+
+Branch: `phase/08-local-signing`
+
+**Goal:** Sign the three `.exe`s by hand on the build laptop using your
+existing **Azure Artifact Signing** (formerly Trusted Signing) account,
+authenticating interactively with `az login`. This is the foundation: it
+proves the account, region/endpoint, signing-account name, certificate
+profile, and the `signtool`/dlib toolchain all work *before* any CI exists.
+GitHub (Phase 9) and GitLab (Phase 10) are the same `signtool` invocation
+with a non-interactive credential swapped in.
+
+Full operational detail: **`docs/SIGNING-AZURE-ARTIFACT.md`** — read it
+first; it carries the exact commands, the EU-eligibility note, the region
+endpoints, the role assignment, and the three auth models.
+
+Steps (human, on the laptop):
+1. **Confirm the account is alive (do this first).** Azure portal →
+   Artifact Signing → your account: identity validation **Completed**,
+   certificate profile is **Public Trust**, and note the **region
+   endpoint** (West Europe → `https://weu.codesigning.azure.net/`). If the
+   identity is an EU *individual* rather than an *organization*, stop:
+   Public Trust is not available to EU individuals (see the doc) — you'll
+   need an org identity.
+2. Install the **Trusted Signing Client Tools** (the dlib + a current
+   `signtool`):
+   `winget install -e --id Microsoft.Azure.TrustedSigningClientTools`.
+3. Assign yourself the **"Trusted Signing Certificate Profile Signer"**
+   role on the signing account (your user, not a service principal yet).
+4. `az login`, then run the `signtool … /dlib … /dmdf metadata.json`
+   command from the doc against a copy of `ftdi-unbind.exe`. Verify with
+   right-click → Properties → Digital Signatures, and
+   `signtool verify /pa /v ftdi-unbind.exe`.
+5. Capture the working invocation as `scripts/sign-local.ps1` (params:
+   files to sign; reads endpoint/account/profile from `signing.metadata.json`,
+   which is committed; contains **no secrets**).
+
+Claude Code's part (autonomous):
+- Author `scripts/sign-local.ps1` and `signing.metadata.json.template`
+  from the doc once the human confirms the working command's parameters.
+- Add a `docs/SIGNING-AZURE-ARTIFACT.md` "what we confirmed" section
+  recording the live endpoint/account/profile values (non-secret).
+
+Commits:
+- `docs(signing): SIGNING-AZURE-ARTIFACT.md — Azure Artifact Signing setup`
+- `feat(signing): scripts/sign-local.ps1 + signing.metadata.json template`
+- `docs(signing): record confirmed endpoint/account/profile (non-secret)`
+
+Acceptance:
+- [ ] Portal confirms Completed identity, Public Trust profile, known region
+- [ ] One `.exe` signed by hand; `signtool verify /pa /v` passes
+- [ ] Properties → Digital Signatures shows your validated identity + a
+      trusted timestamp (`http://timestamp.acs.microsoft.com`)
+- [ ] `scripts/sign-local.ps1 ftdi-*.exe` signs all three exes
+- [ ] No secret committed (metadata.json holds only endpoint/account/profile)
+
+---
+
+## Phase 9 — GitHub Actions release signing via OIDC (human-gated setup)
+
+Branch: `phase/09-github-signing`
+
+**Goal:** The tagged-release workflow signs the exes in CI on your GitHub
+account using a **federated (OIDC) credential** — no long-lived client
+secret stored anywhere, and a fork **cannot** sign with your identity
+because the federated credential is bound to your specific repo. This is
+the `SIGNING.md` "bring your own identity" guarantee, realised.
+
+Detail: `docs/SIGNING-AZURE-ARTIFACT.md` §GitHub OIDC.
+
+Steps:
+1. **Human (Azure side):** create an Entra **App Registration** (no secret),
+   assign it the **Trusted Signing Certificate Profile Signer** role on the
+   signing account, and add a **federated identity credential** scoped to
+   `repo:<you>/<repo>:ref:refs/tags/v*` (or environment-scoped). Record
+   `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`.
+2. **Human (GitHub side):** add those three as **repository secrets**.
+   (They're IDs, not credentials — the trust is the federation, so a fork
+   without the federated credential cannot use them.)
+3. **Claude Code:** extend the Phase 7 `release.yml` signing step:
+   `permissions: id-token: write`; `azure/login@v3` (client-id/tenant-id/
+   subscription-id, OIDC); then `azure/artifact-signing-action@v2` with the
+   endpoint/account/profile and `files-folder-filter: exe`. **Gate it** so
+   it no-ops when `AZURE_CLIENT_ID` is absent (fork-safe), per `SIGNING.md`.
+4. Tag a throwaway `v0.1.1-rc` to exercise the path end to end; confirm the
+   attached exes are signed.
+
+Autonomy: Claude Code writes the workflow; the human does the Azure/GitHub
+credential setup (Claude Code never sees or holds the identity).
+
+Commits:
+- `feat(ci): sign release exes via Azure Artifact Signing + OIDC`
+- `docs(signing): GitHub OIDC federated-credential setup steps`
+- `test(ci): rc tag produces signed, verifiable exes`
+
+Acceptance:
+- [ ] App registration has **no client secret**; federation scoped to repo
+- [ ] Tagged build attaches **signed** exes; `signtool verify /pa` passes
+      (or Get-AuthenticodeSignature on the runner)
+- [ ] With secrets absent (simulated fork), the step no-ops; build succeeds
+      and attaches **unsigned** exes — no failure, no identity exposure
+
+---
+
+## Phase 10 — GitLab CI signing on the private cloud (human-gated setup)
+
+Branch: `phase/10-gitlab-signing`
+
+**Goal:** The same signing on your self-managed GitLab
+(`gitlab.compelcon.se`), running on a **Windows runner** (Authenticode PE
+signing is Windows-only), authenticating to Azure. Prefer GitLab→Entra
+**OIDC workload-identity federation** (no stored secret); fall back to a
+**service-principal client secret** in a masked+protected CI/CD variable if
+the instance can't federate.
+
+Detail: `docs/SIGNING-AZURE-ARTIFACT.md` §GitLab.
+
+Steps:
+1. **Human (runner):** register/confirm a **Windows** GitLab runner tagged
+   `windows`; install the Trusted Signing Client Tools + a current Windows
+   SDK signtool on it (same as Phase 8). A Linux runner cannot Authenticode-
+   sign.
+2. **Human (Azure side), choose one:**
+   - **OIDC (preferred):** add a second **federated identity credential** to
+     the *same* App Registration from Phase 9, with issuer =
+     `https://gitlab.compelcon.se` and subject = your GitLab project/ref
+     claim. **Pre-req:** Microsoft Entra must be able to fetch
+     `https://gitlab.compelcon.se/.well-known/openid-configuration` over the
+     public internet with valid TLS. If the instance is **not** publicly
+     reachable, federation can't work — use the secret path.
+   - **Client secret (fallback):** create a client secret on the App
+     Registration; store as **masked + protected** CI/CD variables
+     `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET`.
+3. **Claude Code:** author `.gitlab-ci.yml` `sign` job (`tags: [windows]`).
+   - OIDC: declare an `id_tokens` block (`aud: api://AzureADTokenExchange`),
+     `az login --service-principal --federated-token`, then `signtool`.
+   - Secret: set the `AZURE_*` env from the protected variables; the dlib
+     picks them up via `DefaultAzureCredential`; then `signtool`.
+   - Reuse `scripts/sign-local.ps1` so all three contexts call one script.
+4. Run the pipeline on a tag; confirm signed artifacts.
+
+Autonomy: Claude Code writes `.gitlab-ci.yml` + the shared script; the human
+provisions the Windows runner and the Azure-side credential/federation.
+
+Commits:
+- `feat(ci): GitLab Windows-runner signing job (OIDC, secret fallback)`
+- `docs(signing): GitLab federation vs client-secret, reachability caveat`
+- `test(ci): tag pipeline produces signed, verifiable exes`
+
+Acceptance:
+- [ ] Windows runner signs the exes; `signtool verify /pa /v` passes
+- [ ] Chosen auth path documented; if OIDC, the discovery-reachability
+      pre-req is stated; if secret, variables are masked + protected
+- [ ] One `scripts/sign-local.ps1` is the single signing entry point shared
+      by laptop, GitHub, and GitLab
+- [ ] Pipeline without the credential present builds unsigned without failing
