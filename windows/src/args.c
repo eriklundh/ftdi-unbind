@@ -9,6 +9,7 @@ int parse_args(int argc, char **argv, action_t action, options *opt) {
     opt->all     = 0;
     opt->help    = 0;
     opt->list    = 0;
+    opt->about   = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--dry-run") == 0) {
@@ -20,6 +21,8 @@ int parse_args(int argc, char **argv, action_t action, options *opt) {
         } else if (strcmp(argv[i], "-h") == 0 ||
                    strcmp(argv[i], "--help") == 0) {
             opt->help = 1;
+        } else if (strcmp(argv[i], "--about") == 0) {
+            opt->about = 1;
         } else if (argv[i][0] == '-') {
             return EXIT_USAGE;  /* unknown flag */
         } else if (!opt->vidpid) {
@@ -29,7 +32,7 @@ int parse_args(int argc, char **argv, action_t action, options *opt) {
         }
     }
 
-    if (opt->help || opt->list) return EXIT_OK;
+    if (opt->help || opt->list || opt->about) return EXIT_OK;
     if (!opt->vidpid) return EXIT_USAGE;
     return EXIT_OK;
 }

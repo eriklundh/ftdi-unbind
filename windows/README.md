@@ -1,124 +1,121 @@
-# ftdi-winusb-rebind planning package
+# ftdi-winusb-rebind
 
-A TDD-style development plan for **ftdi-winusb-rebind** — two Windows CLI
-tools in **C**, statically linked against **libwdi**, that switch an FTDI
-device between its serial (VCP) driver and **WinUSB**:
-
-```
-ftdi-unbind.exe 0403:6015     install WinUSB  → WebUSB / pyftdi ready
-ftdi-bind.exe   0403:6015     restore the FTDI VCP → COM port returns
-```
-
-These are the Windows half of `DEVICE-BINDING.md` and the purpose-built
-replacement for Zadig's error-prone GUI — strict VID:PID matching, refuse
-on ambiguity, never touch the wrong device. The verb semantics, flags,
-exit codes, and VID:PID formats deliberately match the Linux
-`ftdi-unbind` / `ftdi-bind` scripts so the lab instructions read
-identically across platforms.
-
-## Hand-off to Claude Code
-
-Clone an empty `ftdi-winusb-rebind` repo and copy this package in:
+Two Windows command-line tools that switch an FTDI device between its
+serial (VCP) driver and **WinUSB** — the Windows half of the
+cross-platform device-binding story:
 
 ```
-CLAUDE.md                              ->  CLAUDE.md
-PLAN.md                                ->  PLAN.md
-docs/BUILD-ENVIRONMENT.md              ->  docs/BUILD-ENVIRONMENT.md
-docs/LIBWDI-API.md                     ->  docs/LIBWDI-API.md
-docs/RESTORE-STRATEGY.md               ->  docs/RESTORE-STRATEGY.md
-docs/phases/PHASE-00-build-skeleton.md ->  docs/phases/PHASE-00-build-skeleton.md
-docs/phases/PHASE-01-match-core.md     ->  docs/phases/PHASE-01-match-core.md
-docs/phases/PHASE-02-enumerate-list.md ->  docs/phases/PHASE-02-enumerate-list.md
-docs/phases/PHASE-03-install-winusb.md ->  docs/phases/PHASE-03-install-winusb.md
-docs/phases/PHASE-04-restore-vcp.md    ->  docs/phases/PHASE-04-restore-vcp.md
-docs/phases/PHASE-05-cli-two-exes.md   ->  docs/phases/PHASE-05-cli-two-exes.md
-docs/phases/PHASE-06-release.md        ->  docs/phases/PHASE-06-release.md
+ftdi-unbind.exe 0403:6015     install WinUSB   -> WebUSB / pyftdi ready
+ftdi-bind.exe   0403:6015     restore FTDI VCP -> COM port returns
 ```
 
-Optionally copy `OPERATING-CLAUDE-CODE.md` from the main package into
-`docs/` — the Remote Control and budget guidance apply, but note this is
-**Windows**: the Linux-specific scheduling bits (`at`, `tmux`, `sudo`)
-don't apply; Windows uses Task Scheduler and UAC. Then point Claude Code
-at it:
-
-> Read CLAUDE.md and docs/BUILD-ENVIRONMENT.md, then start Phase 0 from
-> docs/phases/PHASE-00-build-skeleton.md.
-
-## Build vs install — the autonomy boundary
-
-The key operational rule (full table in CLAUDE.md): Claude Code builds,
-links static libwdi, and runs the pure-logic unit tests **autonomously**.
-The driver-mutating integration tests (Phases 3–4) need **admin + the
-real FT231X** and are **human-run** — you don't loop an autonomous agent
-on driver install/remove. Bring any libwdi or SetupAPI surprises from
-those back to the design thread.
-
-## Toolchain (decided)
-
-- **C11**, **CMake**, **MSVC** toolset, **static CRT (`/MT`)**.
-- Opens in **VSCode** (CMake Tools — the contribution-friendly path) and
-  natively in **Visual Studio 2022/2026**. CMake is the common
-  denominator so neither IDE is required.
-- Two self-contained `.exe`s (libwdi embeds its WinUSB payload; `/MT`
-  removes the vcruntime dependency).
-
-See `docs/BUILD-ENVIRONMENT.md` for every download source (libwdi v1.5.0
-from github.com/pbatard/libwdi, the VS C++ workload, optional Unity), the
-static-libwdi build steps, the link dependencies, and the **LGPL-3.0**
-relink note.
-
-See `docs/WINDOWS-DEV-SETTINGS.md` before your first build: Windows 11's
-Smart App Control and Defender (and tools like Acronis True Image) block
-unsigned executables by default.  One-time per-machine configuration is
-required or the built `.exe` files and `ctest` will not run.
-
-## The one thing to understand first
-
-**The two directions are not symmetric.**
-- **unbind** (install WinUSB) is native libwdi — easy.
-- **bind** (restore FTDI VCP) is **not** a libwdi install. libwdi doesn't
-  reinstall FTDI's proprietary driver. Restore means SetupAPI/CfgMgr32:
-  remove the WinUSB association, re-trigger enumeration so Windows
-  reinstalls the FTDI VCP, then verify it actually came back. This is the
-  riskiest part — `docs/RESTORE-STRATEGY.md` designs it before Phase 4.
-
-## TDD on a driver tool — what's honest
-
-Driver installation can't be unit-tested (admin + real device + mutates
-system state). So, exactly like the firmware repo:
-- **Pure logic → classic host-side TDD, test-first:** VID:PID
-  parse/normalise, device matching, ambiguity detection, arg parsing,
-  exit codes, and the hardware-id selection in the restore path. These
-  compile without libwdi/Windows-driver APIs and run anywhere — and
-  they're where the *safety* lives.
-- **Install/restore → human-gated integration tests** on a real FT231X.
-
-## Package layout
+A third tool handles driver-store cleanup when the VCP driver goes
+missing or the COM port number keeps creeping up:
 
 ```
-ftdi-winusb-rebind-plan/
-├── README.md                 ← this file
-├── CLAUDE.md                 ← project memory: semantics, safety, stack, TDD
-├── PLAN.md                   ← phases 0–6
-└── docs/
-    ├── BUILD-ENVIRONMENT.md  ← toolchain + ALL download sources + LGPL note
-    ├── LIBWDI-API.md         ← the wdi_* calls (unbind direction)
-    ├── RESTORE-STRATEGY.md   ← SetupAPI/CfgMgr restore (bind direction, hard)
-    ├── SIGNING.md            ← cheapest-path code signing + CI secrets + forker setup
-    │                            (CI.md — the release pipeline matrix — still to come)
-    └── phases/
-        ├── PHASE-00-build-skeleton.md   ← CMake + static libwdi link (the "blink")
-        ├── PHASE-01-match-core.md       ← pure VID:PID + matching (TDD)
-        ├── PHASE-02-enumerate-list.md   ← wdi_create_list, --list, --dry-run
-        ├── PHASE-03-install-winusb.md   ← unbind: install WinUSB (human-gated)
-        ├── PHASE-04-restore-vcp.md      ← bind: restore VCP (human-gated, hard)
-        ├── PHASE-05-cli-two-exes.md     ← two exes over one core, CLI parity
-        └── PHASE-06-release.md          ← self-contained exes, LICENSE, tag
+ftdi-doctor.exe --diagnose
+ftdi-doctor.exe --compact-comdb [--dry-run]
+ftdi-doctor.exe --reset-comport 0403:6015 [--dry-run]
+ftdi-doctor.exe --purge-store [--dry-run] [--yes]
 ```
 
-## Where it sits in the project
+## Why this exists
 
-Fourth repo in the family, alongside `ftdi-webusb-driver`, `terminal-app`,
-and `pico-cdc-test-rig`. It makes `DEVICE-BINDING.md`'s Windows section
-real: the "planned `ftdi-unbind.exe` / `ftdi-bind.exe`" become shipping
-tools with the same interface as the Linux scripts.
+[Zadig](https://zadig.akeo.ie/) is the standard Windows tool for
+installing WinUSB, but its classic failure mode in a classroom or lab is
+a student accidentally swapping the driver on the **wrong** device.
+
+`ftdi-unbind` and `ftdi-bind` are the purpose-built replacement:
+
+- strict **VID:PID matching** — never touch a non-matching device
+- **refuse on ambiguity** — two identical dongles plugged in? error out,
+  list them, and wait for `--all` or for one to be unplugged
+- flag/exit-code/VID:PID format **parity with the Linux
+  `ftdi-unbind` / `ftdi-bind` scripts** so lab instructions read
+  identically on both platforms
+
+## Quick start
+
+```
+# install WinUSB (releases the device for WebUSB / pyftdi)
+ftdi-unbind.exe 0403:6015
+
+# restore the FTDI VCP driver (COM port returns)
+ftdi-bind.exe 0403:6015
+
+# see all USB devices and their current driver
+ftdi-unbind.exe --list
+
+# dry run: show which device would be acted on, change nothing
+ftdi-unbind.exe --dry-run 0403:6015
+```
+
+Driver-mutating operations (`ftdi-unbind`, `ftdi-bind`,
+`ftdi-doctor --purge-store`, `--compact-comdb`, `--reset-comport`)
+require an **elevated (administrator) prompt**.  `--list`, `--dry-run`,
+and `ftdi-doctor --diagnose` do not.
+
+## VID:PID formats accepted
+
+All three tools accept the same forms the Linux scripts do:
+
+```
+0403:6015       # canonical
+0x0403:0x6015   # with 0x prefix
+403:6015        # leading-zero-optional
+```
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0`  | success |
+| `1`  | no matching device, or ambiguous without `--all` |
+| `2`  | bad / missing arguments |
+
+These are identical to the Linux `ftdi-bind` / `ftdi-unbind` scripts.
+
+## Flags
+
+```
+--list       list all USB devices and their current driver
+--dry-run    resolve + report the target; change nothing (no elevation needed)
+--all        act on every matching device (overrides the ambiguity check)
+-h/--help    show usage
+--about      show copyright information
+```
+
+## Build from source
+
+Requirements: Visual Studio 2022 or 2026 with the **Desktop development
+with C++** workload (MSVC + Windows SDK), CMake 3.20+, and
+[libwdi v1.5.0](https://github.com/pbatard/libwdi) built as a static
+library.  See [`docs/BUILD-ENVIRONMENT.md`](docs/BUILD-ENVIRONMENT.md)
+for the full toolchain setup, the libwdi static-build steps, and the
+**LGPL-3.0 relink note**.
+
+```
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 ^
+    -DLIBWDI_INCLUDE_DIR=C:\path\to\libwdi\libwdi ^
+    -DLIBWDI_LIB=C:\path\to\libwdi\x64\Release\lib\libwdi.lib
+
+cmake --build build --config Release
+ctest --test-dir build -C Release
+```
+
+The unit tests (`ctest`) do not need admin or hardware.  The driver
+install/restore integration tests do — see
+[`docs/BUILD-ENVIRONMENT.md`](docs/BUILD-ENVIRONMENT.md).
+
+## Licensing
+
+The tool sources are licensed under **GPL-3.0-only** (see `LICENSE`).
+They statically link [libwdi](https://github.com/pbatard/libwdi)
+(LGPL-3.0).  The GPL-3.0 satisfies the LGPL-3.0 requirement that
+end-users can relink against a modified libwdi; if you need a more
+permissive licence for your own fork, you must provide a relink path —
+see [`docs/BUILD-ENVIRONMENT.md`](docs/BUILD-ENVIRONMENT.md) §Licensing.
+
+---
+
+(c) 2026 Erik Lundh - The Joy of Engineering Compelcon AB

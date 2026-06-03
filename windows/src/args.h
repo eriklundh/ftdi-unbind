@@ -23,6 +23,7 @@ typedef struct {
     int         all;      /* --all: act on every matching device */
     int         help;     /* -h / --help */
     int         list;     /* --list: enumerate devices, no VID:PID needed */
+    int         about;    /* --about: print copyright and exit */
 } options;
 
 /*

@@ -102,6 +102,8 @@ static int scan_ftdi_oem_infs(ftdi_inf_t *entries, int max)
     return count;
 }
 
+#define ABOUT_TEXT "(c) 2026 Erik Lundh - The Joy of Engineering Compelcon AB\n"
+
 /* ── print_usage ─────────────────────────────────────────────────────── */
 
 static void print_usage(const char *prog) {
@@ -118,6 +120,7 @@ static void print_usage(const char *prog) {
         "  --dry-run   show what would change; mutate nothing\n"
         "  --yes       confirm destructive operations (required by --purge-store)\n"
         "  -h/--help   show this help\n"
+        "  --about     show copyright information\n"
         "\n"
         "  VID:PID  accepted forms: 0403:6015  0x0403:0x6015  403:6015\n",
         prog);
@@ -390,6 +393,9 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "-h") == 0 ||
                    strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
+            return 0;
+        } else if (strcmp(argv[i], "--about") == 0) {
+            printf(ABOUT_TEXT);
             return 0;
         } else {
             fprintf(stderr, "error: unknown argument '%s'\n", argv[i]);
