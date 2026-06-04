@@ -7,6 +7,19 @@ static char *dup_str(const char *s) {
     return _strdup(s ? s : "");
 }
 
+/* Extract the USB serial number from a Windows instance ID.
+ * Instance IDs have the form "USB\VID_XXXX&PID_XXXX\<suffix>".
+ * The suffix is the serial when it contains no '&'; otherwise Windows
+ * generated a location-based ID (e.g. "4&3a2b1c0&0&1") — treat as blank. */
+static char *extract_serial(const char *device_id) {
+    if (!device_id) return dup_str("");
+    const char *last_bs = strrchr(device_id, '\\');
+    if (!last_bs) return dup_str("");
+    const char *suffix = last_bs + 1;
+    if (strchr(suffix, '&')) return dup_str("");  /* location-based, no serial */
+    return dup_str(suffix);
+}
+
 int enum_devices(device_record **out, int *out_n) {
     *out   = NULL;
     *out_n = 0;
@@ -38,7 +51,7 @@ int enum_devices(device_record **out, int *out_n) {
         recs[i].desc      = dup_str(d->desc);
         recs[i].device_id = dup_str(d->device_id);
         recs[i].driver    = d->driver ? _strdup(d->driver) : NULL;
-        recs[i].serial    = dup_str("");  /* populated by feat(enum) commit */
+        recs[i].serial    = extract_serial(d->device_id);
     }
 
     wdi_destroy_list(list);
