@@ -88,12 +88,19 @@ These are identical to the Linux and macOS `ftdi-bind` / `ftdi-unbind` scripts.
 ## Flags
 
 ```
---list       list all USB devices and their current driver
---dry-run    resolve + report the target; change nothing (no elevation needed)
---all        act on every matching device (overrides the ambiguity check)
--h/--help    show usage
---about      show copyright information
+--list            list all USB devices with serial and current driver
+--dry-run         resolve + report the target; change nothing (no elevation needed)
+--serial SN       target the device with this USB serial number; resolves
+                  ambiguity when multiple devices share the same VID:PID
+                  without needing --all  (planned: Phase 7)
+--all             act on every matching device (overrides the ambiguity check)
+-h/--help         show usage
+--about           show copyright information
 ```
+
+`--serial` and `--all` are mutually exclusive.  When two identical dongles
+are attached, the ambiguity error lists each candidate's serial number and
+hints `use --serial <value> to select one`.
 
 ## Build from source
 
