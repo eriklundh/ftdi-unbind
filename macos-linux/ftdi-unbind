@@ -60,7 +60,8 @@ done
 [ -n "$VIDPID" ] || usage
 
 # Normalise VID:PID → lowercase, strip 0x, zero-pad to 4 hex digits.
-arg="${VIDPID,,}"; arg="${arg//0x/}"
+# Use tr instead of ${var,,} — bash 3.2 (macOS default) lacks the ,, operator.
+arg=$(echo "$VIDPID" | tr '[:upper:]' '[:lower:]'); arg="${arg//0x/}"
 [[ "$arg" == *:* ]] || usage
 vraw="${arg%%:*}"; praw="${arg##*:}"
 [[ "$vraw" =~ ^[0-9a-f]{1,4}$ && "$praw" =~ ^[0-9a-f]{1,4}$ ]] || usage

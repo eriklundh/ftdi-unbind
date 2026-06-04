@@ -59,7 +59,8 @@ done
 [ -n "$VIDPID" ] || usage
 
 # Normalise VID:PID → lowercase, strip 0x, zero-pad to 4 hex digits.
-arg="${VIDPID,,}"; arg="${arg//0x/}"
+# Use tr instead of ${var,,} — bash 3.2 (macOS default) lacks the ,, operator.
+arg=$(echo "$VIDPID" | tr '[:upper:]' '[:lower:]'); arg="${arg//0x/}"
 [[ "$arg" == *:* ]] || usage
 vraw="${arg%%:*}"; praw="${arg##*:}"
 [[ "$vraw" =~ ^[0-9a-f]{1,4}$ && "$praw" =~ ^[0-9a-f]{1,4}$ ]] || usage
@@ -195,15 +196,17 @@ echo "$device_output"
 unloaded_kexts=()
 for kext in "$APPLE_KEXT" "$FTDI_VCP_KEXT"; do
     if ! kextstat 2>/dev/null | grep -qF "$kext"; then
-        # Only include if the kext bundle actually exists on disk —
-        # FTDIUSBSerialDriver is optional (user-installed).
-        if kextfind -bundle-id "$kext" &>/dev/null || \
-           find /System/Library/Extensions /Library/Extensions \
-                -maxdepth 1 -name "*.kext" 2>/dev/null | \
-           xargs -I{} defaults read {}/Contents/Info CFBundleIdentifier 2>/dev/null | \
-           grep -qF "$kext"; then
-            unloaded_kexts+=("$kext")
-        fi
+        # Only include if the kext bundle actually exists on disk.
+        # AppleUSBFTDI is always in the system tree; FTDIUSBSerialDriver is
+        # optional (user-installed under /Library/Extensions/).
+        case "$kext" in
+            com.apple.driver.AppleUSBFTDI)
+                # Present on every macOS install; no path check needed.
+                unloaded_kexts+=("$kext") ;;
+            com.FTDI.driver.FTDIUSBSerialDriver)
+                [ -d "/Library/Extensions/FTDIUSBSerialDriver.kext" ] && \
+                    unloaded_kexts+=("$kext") ;;
+        esac
     fi
 done
 
