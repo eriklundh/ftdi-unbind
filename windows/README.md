@@ -1,13 +1,23 @@
 # ftdi-winusb-rebind
 
 Two Windows command-line tools that switch an FTDI device between its
-serial (VCP) driver and **WinUSB** — the Windows half of the
+serial (VCP) driver and **WinUSB** — the Windows part of the
 cross-platform device-binding story:
 
 ```
 ftdi-unbind.exe 0403:6015     install WinUSB   -> WebUSB / pyftdi ready
 ftdi-bind.exe   0403:6015     restore FTDI VCP -> COM port returns
 ```
+
+The Linux and macOS counterparts (`ftdi-unbind` / `ftdi-bind` in
+`ftdi-rebind-scripts`) share identical flags, exit codes, and VID:PID
+formats — lab instructions read the same on every platform.
+
+| Platform | Tool | Mechanism | Scope |
+|---|---|---|---|
+| **Windows** | `ftdi-unbind.exe` / `ftdi-bind.exe` | libwdi (WinUSB install) / SetupAPI (VCP restore) | Per-device by VID:PID |
+| **Linux** | `ftdi-unbind` / `ftdi-bind` | sysfs `ftdi_sio` bind/unbind | Per-device, per-interface |
+| **macOS** | `ftdi-unbind` / `ftdi-bind` | `kextunload` / `kextload` | Global (all FTDI devices) |
 
 A third tool handles driver-store cleanup when the VCP driver goes
 missing or the COM port number keeps creeping up:
@@ -30,9 +40,9 @@ a student accidentally swapping the driver on the **wrong** device.
 - strict **VID:PID matching** — never touch a non-matching device
 - **refuse on ambiguity** — two identical dongles plugged in? error out,
   list them, and wait for `--all` or for one to be unplugged
-- flag/exit-code/VID:PID format **parity with the Linux
+- flag/exit-code/VID:PID format **parity with the Linux and macOS
   `ftdi-unbind` / `ftdi-bind` scripts** so lab instructions read
-  identically on both platforms
+  identically on all platforms
 
 ## Quick start
 
@@ -57,7 +67,7 @@ and `ftdi-doctor --diagnose` do not.
 
 ## VID:PID formats accepted
 
-All three tools accept the same forms the Linux scripts do:
+All three tools accept the same forms the Linux and macOS scripts do:
 
 ```
 0403:6015       # canonical
@@ -73,7 +83,7 @@ All three tools accept the same forms the Linux scripts do:
 | `1`  | no matching device, or ambiguous without `--all` |
 | `2`  | bad / missing arguments |
 
-These are identical to the Linux `ftdi-bind` / `ftdi-unbind` scripts.
+These are identical to the Linux and macOS `ftdi-bind` / `ftdi-unbind` scripts.
 
 ## Flags
 

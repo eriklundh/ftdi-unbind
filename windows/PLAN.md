@@ -88,7 +88,7 @@ Commits (interleaved test/feat):
 Acceptance:
 - [ ] `ctest` green; covers normalisation, rejection, match, ambiguity
 - [ ] Core compiles with no libwdi/Windows-driver dependency
-- [ ] Semantics match the Linux scripts exactly (same inputs → same calls)
+- [ ] Semantics match the Linux and macOS scripts exactly (same inputs → same calls)
 
 ---
 
@@ -292,22 +292,22 @@ Acceptance:
 
 Branch: `phase/06-cli-parity`
 
-**Goal:** Verify flag/exit-code/help-text parity with the Linux
+**Goal:** Verify flag/exit-code/help-text parity with the Linux and macOS
 `ftdi-unbind` / `ftdi-bind` scripts now that both exes exist.
 
 Steps:
-1. Flag/exit-code audit against the Linux scripts: `--dry-run`, `--all`,
-   `-h/--help`; exit 2 usage, 1 no-match/ambiguous, 0 ok.
-2. Help text: tighten wording to mirror the Linux tools' phrasing.
+1. Flag/exit-code audit against the Linux and macOS scripts: `--dry-run`,
+   `--all`, `-h/--help`; exit 2 usage, 1 no-match/ambiguous, 0 ok.
+2. Help text: tighten wording to mirror the Linux/macOS tools' phrasing.
 3. CTest: add exit-code tests (run the exes with bad args, check `$?`).
 
 Commits:
-- `test(cli): exit-code + flag parity with the Linux scripts`
-- `fix(cli): align help text and exit codes with Linux tools`
+- `test(cli): exit-code + flag parity with the Linux and macOS scripts`
+- `fix(cli): align help text and exit codes with Linux and macOS tools`
 
 Acceptance:
 - [x] Same flags, exit codes, VID:PID formats as `ftdi-(un)bind` scripts
-- [x] `--help` reads consistently with the Linux tools
+- [x] `--help` reads consistently with the Linux and macOS tools
 - [x] CTest covers the exit-code contract (test_cli: 14 assertions, no admin)
 
 ---
