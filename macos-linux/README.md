@@ -27,9 +27,10 @@ mkdir -p ~/bin && cp ftdi-unbind ftdi-bind ~/bin/
 
 | Flag | Effect |
 |---|---|
-| `--list` | List all USB devices with VID:PID, description, and current driver. No `VID:PID` argument needed. |
+| `--list` | List all USB devices with VID:PID, description, serial, and current driver. No `VID:PID` needed. |
 | `--dry-run` / `-n` | Show what would be acted on; change nothing. No root required. |
-| `--all` | Override the ambiguity guard — act even when multiple devices match `VID:PID`. On macOS also required when >1 FTDI device is attached (since kext unload/load is global). |
+| `--serial SN` | Target the device with this USB serial number. Resolves ambiguity when multiple devices share the same VID:PID, without needing `--all`. macOS: kext unload/load is still global (all FTDI devices affected). |
+| `--all` | Override the ambiguity guard — act even when multiple devices match `VID:PID`. Mutually exclusive with `--serial`. |
 | `--about` | Print version and copyright. |
 | `-h` / `--help` | Show usage. |
 
@@ -37,12 +38,15 @@ Exit codes match `ftdi-unbind.exe` / `ftdi-bind.exe`: **0** = OK, **1** = no mat
 
 ## Use
 
-List all connected USB devices to find your device's VID:PID and confirm its current driver:
+List all connected USB devices to find VID:PID, serial number, and current driver:
 
 ```bash
 ftdi-unbind --list
-# 0403:6015  FT231X USB UART                            [ftdi_sio]
-# 04b4:8613  Cypress FX2                                [(none)]
+# VID:PID    description                               serial                [driver]
+# ------------------------------------------------------------------------------------------
+# 0403:6015  FT231X USB UART                           A1B2C3D4              [ftdi_sio]
+# 0403:6015  FT231X USB UART                           E5F6G7H8              [ftdi_sio]
+# 04b4:8613  Cypress FX2                                                     [(none)]
 ```
 
 **Always dry-run first.** It shows exactly which device(s) and interfaces
@@ -67,15 +71,40 @@ normalise to the same thing.
 ## Ambiguity guard
 
 If two devices with the same VID:PID are attached (e.g. two FT231X boards),
-the scripts refuse to act and list the conflicting devices:
+the scripts refuse to act and list the conflicting devices with their serial numbers:
 
 ```
-error: 2 devices match 0403:6015 — use --all to act on all, or unplug the others.
-  0403:6015  bus-id: 1-1.2  serial: FT1234AB
-  0403:6015  bus-id: 1-1.4  serial: FT5678CD
+error: 2 devices match 0403:6015 — use --serial SN to select one, --all to act on all,
+       or unplug the others.
+  0403:6015  bus-id: 1-1.2  serial: A1B2C3D4
+  0403:6015  bus-id: 1-1.4  serial: E5F6G7H8
 ```
 
-Pass `--all` to proceed, or unplug all but the target device first.
+Preferred resolution — target by serial (no `--all` needed, no device to unplug):
+
+```bash
+ftdi-unbind 0403:6015 --serial A1B2C3D4
+```
+
+Alternative — act on all matching devices:
+
+```bash
+ftdi-unbind 0403:6015 --all
+```
+
+`--serial` and `--all` are mutually exclusive.
+
+### Devices with no serial number
+
+Some FTDI boards have no USB serial number programmed into their EEPROM.
+`--serial` cannot select them; the tool reports this clearly and falls back
+to requiring `--all` (or unplugging the others).
+
+### macOS note on --serial
+
+On macOS, `--serial` narrows the presence check and resolves the ambiguity
+guard, but `kextunload` / `kextload` is still global — all attached FTDI
+devices are affected. The tools print a reminder when `--serial` is used.
 
 ## macOS notes
 
