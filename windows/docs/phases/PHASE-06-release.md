@@ -44,6 +44,6 @@ to build from source in either VSCode or Visual Studio.
 A student on Windows runs `ftdi-unbind 0403:6015` (elevated) and the FTDI
 dongle is WebUSB/pyftdi-ready — no Zadig, no GUI mispick, no wrong-device
 accidents. `ftdi-bind 0403:6015` puts the COM port back when they need it.
-Same commands, flags, and behaviour as the Linux scripts, so the lab
-instructions read identically across platforms and `DEVICE-BINDING.md`'s
-"planned" Windows tools become "shipping".
+Same commands, flags, and behaviour as the Linux and macOS scripts, so the
+lab instructions read identically across all platforms and
+`DEVICE-BINDING.md`'s "planned" Windows tools become "shipping".
