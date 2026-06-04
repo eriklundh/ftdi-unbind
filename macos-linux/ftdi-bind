@@ -2,34 +2,50 @@
 #
 # ftdi-bind VID:PID [--dry-run]
 #
-# Re-attach the kernel ftdi_sio driver to every USB interface whose parent
-# device matches VID:PID and that currently has NO driver — e.g. after
-# ftdi-unbind, or after libusb/pyftdi left it detached on exit.
+# Re-attach the FTDI kernel driver to a USB device matched by VID:PID.
+# Counterpart to ftdi-unbind.  A device unplug/replug always rebinds too.
+#
+#   Linux:  writes to sysfs to rebind ftdi_sio to driverless interfaces of
+#           matching devices.  Scoped to the specific device(s).
+#
+#   macOS:  reloads the FTDI kernel extension(s) that were unloaded by
+#           ftdi-unbind.  kext load is not per-device: all FTDI devices
+#           are reclaimed simultaneously.  VID:PID is used only to verify
+#           a matching device is present.
+#           Simplest alternative on macOS: unplug/replug the device.
 #
 # Safe by design:
-#   * binds ONLY interfaces that are currently driverless
-#   * never steals an interface from another driver
-#   * skips interfaces already bound to ftdi_sio
-#   * --dry-run shows exactly what it would do and changes nothing
+#   * Linux  — binds ONLY currently driverless interfaces; never steals
+#              an interface already owned by another driver
+#   * macOS  — loads ONLY the FTDI kext(s), does not touch other kexts
+#   * --dry-run shows exactly what would happen and changes nothing
 #
 set -euo pipefail
-shopt -s nullglob
 
-DRIVER=/sys/bus/usb/drivers/ftdi_sio
 PROG=${0##*/}
+OS="$(uname -s)"
+
+[[ "$OS" == "Linux" ]] && shopt -s nullglob
 
 usage() {
     cat >&2 <<EOF
 usage: $PROG VID:PID [--dry-run]
 
-  $PROG 0403:6015          re-attach ftdi_sio to all FT231X (0403:6015)
+  $PROG 0403:6015          re-attach FTDI driver to all FT231X (0403:6015)
   $PROG 0x0403:0x6015 -n   preview only — change nothing
 
-Counterpart to ftdi-unbind. A device unplug/replug also rebinds.
+  Linux:  rebinds ftdi_sio per interface via sysfs (per-device)
+  macOS:  reloads AppleUSBFTDI / FTDIUSBSerialDriver kext(s)
+          (unplug/replug also works and is often simpler)
+
+Counterpart to ftdi-unbind.
 EOF
     exit 2
 }
 
+# ---------------------------------------------------------------------------
+# Argument parsing (shared)
+# ---------------------------------------------------------------------------
 DRYRUN=0
 VIDPID=""
 for a in "$@"; do
@@ -42,7 +58,7 @@ for a in "$@"; do
 done
 [ -n "$VIDPID" ] || usage
 
-# Normalise VID:PID -> lowercase, strip any 0x, zero-pad to 4 hex digits.
+# Normalise VID:PID → lowercase, strip 0x, zero-pad to 4 hex digits.
 arg="${VIDPID,,}"; arg="${arg//0x/}"
 [[ "$arg" == *:* ]] || usage
 vraw="${arg%%:*}"; praw="${arg##*:}"
@@ -50,13 +66,27 @@ vraw="${arg%%:*}"; praw="${arg##*:}"
 VID=$(printf '%04x' "0x$vraw")
 PID=$(printf '%04x' "0x$praw")
 
-# Need root to write sysfs / modprobe — but only if actually changing things.
+# Portable self-path for sudo re-exec (readlink -f is GNU-only; not on macOS)
+SCRIPT_PATH="$(cd "$(dirname "$0")"; pwd -P)/$(basename "$0")"
+
+# ---------------------------------------------------------------------------
+# OS dispatch
+# ---------------------------------------------------------------------------
+case "$OS" in
+
+# ===========================================================================
+Linux)
+# ===========================================================================
+
+DRIVER=/sys/bus/usb/drivers/ftdi_sio
+
+# Need root to write sysfs / modprobe — re-exec under sudo when needed.
 if [ "$DRYRUN" -eq 0 ] && [ "$(id -u)" -ne 0 ]; then
-    exec sudo "$(readlink -f "$0")" "$@"
+    exec sudo "$SCRIPT_PATH" "$@"
 fi
 
-# Ensure ftdi_sio is loaded so the driver's bind file exists. (modprobe
-# also auto-binds matching devices, which is fine — the end state we want.)
+# Ensure ftdi_sio is loaded so the driver's bind file exists.
+# (modprobe also auto-binds matching devices — the end state we want.)
 if [ ! -d "$DRIVER" ]; then
     if [ "$DRYRUN" -eq 1 ]; then
         echo "$PROG: ftdi_sio not loaded (would 'modprobe ftdi_sio')"
@@ -71,8 +101,8 @@ fi
 matched=0
 acted=0
 for devdir in /sys/bus/usb/devices/*; do
-    [ -r "$devdir/idVendor" ] || continue
-    [ "$(< "$devdir/idVendor")" = "$VID" ] || continue
+    [ -r "$devdir/idVendor" ]          || continue
+    [ "$(< "$devdir/idVendor")" = "$VID" ]  || continue
     [ "$(< "$devdir/idProduct")" = "$PID" ] || continue
     matched=1
     dev=${devdir##*/}
@@ -109,3 +139,138 @@ if [ "$DRYRUN" -eq 1 ]; then
 else
     echo "$PROG: $acted interface(s) bound."
 fi
+
+;;
+# ===========================================================================
+Darwin)
+# ===========================================================================
+
+APPLE_KEXT="com.apple.driver.AppleUSBFTDI"
+FTDI_VCP_KEXT="com.FTDI.driver.FTDIUSBSerialDriver"
+
+VID_DEC=$(( 16#$VID ))
+PID_DEC=$(( 16#$PID ))
+
+# ---------------------------------------------------------------------------
+# 1. Verify a matching device is present
+# ---------------------------------------------------------------------------
+macos_list_devices() {
+    python3 - "$VID_DEC" "$PID_DEC" <<'PYEOF'
+import sys, subprocess, plistlib
+
+vid, pid = int(sys.argv[1]), int(sys.argv[2])
+try:
+    raw = subprocess.check_output(
+        ['ioreg', '-r', '-c', 'IOUSBDevice', '-a'],
+        stderr=subprocess.DEVNULL)
+    devices = plistlib.loads(raw)
+except Exception as e:
+    print(f"  (ioreg query failed: {e})", file=sys.stderr)
+    sys.exit(2)
+
+found = [d for d in devices
+         if d.get('idVendor') == vid and d.get('idProduct') == pid]
+for d in found:
+    name   = d.get('USB Product Name') or d.get('kUSBProductString') or 'FTDI device'
+    serial = d.get('USB Serial Number') or 'no-serial'
+    print(f"  {name}  (0x{vid:04x}:0x{pid:04x}, serial: {serial})")
+sys.exit(0 if found else 1)
+PYEOF
+}
+
+echo "Looking for device $VID:$PID..."
+if ! device_output=$(macos_list_devices 2>&1); then
+    if echo "$device_output" | grep -q "ioreg query failed"; then
+        echo "$PROG: could not query IOKit: $device_output" >&2
+        exit 1
+    fi
+    echo "$PROG: no device matching $VID:$PID is attached." >&2
+    exit 1
+fi
+echo "$device_output"
+
+# ---------------------------------------------------------------------------
+# 2. Find FTDI kexts that are NOT currently loaded (candidates to reload)
+# ---------------------------------------------------------------------------
+unloaded_kexts=()
+for kext in "$APPLE_KEXT" "$FTDI_VCP_KEXT"; do
+    if ! kextstat 2>/dev/null | grep -qF "$kext"; then
+        # Only include if the kext bundle actually exists on disk —
+        # FTDIUSBSerialDriver is optional (user-installed).
+        if kextfind -bundle-id "$kext" &>/dev/null || \
+           find /System/Library/Extensions /Library/Extensions \
+                -maxdepth 1 -name "*.kext" 2>/dev/null | \
+           xargs -I{} defaults read {}/Contents/Info CFBundleIdentifier 2>/dev/null | \
+           grep -qF "$kext"; then
+            unloaded_kexts+=("$kext")
+        fi
+    fi
+done
+
+if [ "${#unloaded_kexts[@]}" -eq 0 ]; then
+    echo ""
+    echo "$PROG: FTDI kext(s) are already loaded — device should be bound."
+    echo "  If the device still isn't available, try unplug/replug."
+    exit 0
+fi
+
+echo ""
+echo "FTDI kext(s) to reload:"
+for kext in "${unloaded_kexts[@]}"; do
+    echo "  $kext"
+done
+echo ""
+echo "NOTE: kext load is global — ALL attached FTDI devices will be reclaimed."
+echo "TIP:  unplug/replug also rebinds and is often simpler than kextload."
+
+if [ "$DRYRUN" -eq 1 ]; then
+    echo ""
+    echo "(dry run — nothing changed)"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Elevate to root when needed
+# ---------------------------------------------------------------------------
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$SCRIPT_PATH" "$@"
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Load kext(s)
+# ---------------------------------------------------------------------------
+acted=0
+for kext in "${unloaded_kexts[@]}"; do
+    echo "Loading $kext ..."
+    err_file=$(mktemp /tmp/ftdi-kextload-XXXXXX)
+    if kextload -b "$kext" 2>"$err_file"; then
+        echo "  loaded."
+        acted=$((acted + 1))
+    else
+        err=$(<"$err_file")
+        echo "  WARN: could not load $kext" >&2
+        [ -n "$err" ] && echo "  $err" >&2
+        echo "" >&2
+        echo "  Fallback: unplug and replug the device — the kernel will" >&2
+        echo "  re-enumerate it and rebind the driver automatically." >&2
+    fi
+    rm -f "$err_file"
+done
+
+echo ""
+if [ "$acted" -gt 0 ]; then
+    echo "$PROG: $acted kext(s) loaded."
+else
+    echo "$PROG: no kexts were loaded.  Unplug/replug the device to rebind." >&2
+    exit 1
+fi
+
+;;
+# ===========================================================================
+*)
+# ===========================================================================
+echo "$PROG: unsupported OS '$OS' — Linux and macOS are supported." >&2
+exit 1
+;;
+
+esac

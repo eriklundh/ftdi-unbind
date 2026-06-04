@@ -2,33 +2,51 @@
 #
 # ftdi-unbind VID:PID [--dry-run]
 #
-# Detach the kernel ftdi_sio driver from every USB interface whose parent
-# device matches VID:PID, freeing the chip for libusb / pyftdi / WebUSB.
+# Detach the FTDI kernel driver from a USB device matched by VID:PID,
+# freeing it for WebUSB, libusb, or pyftdi.
+#
+#   Linux:  unbinds ftdi_sio from each matching interface via sysfs.
+#           Scoped to the specific device(s) — other USB devices untouched.
+#
+#   macOS:  unloads the FTDI kernel extension(s): AppleUSBFTDI (Apple
+#           built-in) and/or FTDIUSBSerialDriver (FTDI official).
+#           macOS kext unload is NOT per-device — ALL attached FTDI
+#           devices are released simultaneously.  VID:PID is used only
+#           to verify a matching device is present before acting.
 #
 # Safe by design:
-#   * touches ONLY interfaces currently bound to ftdi_sio
-#   * leaves interfaces bound to other drivers, or already free, untouched
-#   * --dry-run shows exactly what it would do and changes nothing
-#   * reversible with ftdi-bind VID:PID  (or just unplug/replug)
+#   * touches only FTDI-family drivers / kexts
+#   * --dry-run shows exactly what would happen and changes nothing
+#   * reversible with:  ftdi-bind VID:PID   (or unplug/replug)
 #
 set -euo pipefail
-shopt -s nullglob
 
-DRIVER=/sys/bus/usb/drivers/ftdi_sio
 PROG=${0##*/}
+OS="$(uname -s)"
+
+# shopt -s nullglob is used in the Linux sysfs glob; harmless to set globally
+# on bash but not available on other shells — guard it.
+[[ "$OS" == "Linux" ]] && shopt -s nullglob
 
 usage() {
     cat >&2 <<EOF
 usage: $PROG VID:PID [--dry-run]
 
-  $PROG 0403:6015          detach ftdi_sio from all FT231X (0403:6015)
+  $PROG 0403:6015          detach FTDI driver from all FT231X (0403:6015)
   $PROG 0x0403:0x6015 -n   preview only — change nothing
+
+  Linux:  unbinds ftdi_sio per interface via sysfs (per-device)
+  macOS:  unloads AppleUSBFTDI / FTDIUSBSerialDriver kext(s) (ALL FTDI
+          devices are released, not just the one specified)
 
 Restore with:  ftdi-bind VID:PID   (or unplug/replug the device)
 EOF
     exit 2
 }
 
+# ---------------------------------------------------------------------------
+# Argument parsing (shared)
+# ---------------------------------------------------------------------------
 DRYRUN=0
 VIDPID=""
 for a in "$@"; do
@@ -41,7 +59,7 @@ for a in "$@"; do
 done
 [ -n "$VIDPID" ] || usage
 
-# Normalise VID:PID -> lowercase, strip any 0x, zero-pad to 4 hex digits.
+# Normalise VID:PID → lowercase, strip 0x, zero-pad to 4 hex digits.
 arg="${VIDPID,,}"; arg="${arg//0x/}"
 [[ "$arg" == *:* ]] || usage
 vraw="${arg%%:*}"; praw="${arg##*:}"
@@ -49,9 +67,23 @@ vraw="${arg%%:*}"; praw="${arg##*:}"
 VID=$(printf '%04x' "0x$vraw")
 PID=$(printf '%04x' "0x$praw")
 
-# Need root to write sysfs — but only if we're actually going to write.
+# Portable self-path for sudo re-exec (readlink -f is GNU-only; not on macOS)
+SCRIPT_PATH="$(cd "$(dirname "$0")"; pwd -P)/$(basename "$0")"
+
+# ---------------------------------------------------------------------------
+# OS dispatch
+# ---------------------------------------------------------------------------
+case "$OS" in
+
+# ===========================================================================
+Linux)
+# ===========================================================================
+
+DRIVER=/sys/bus/usb/drivers/ftdi_sio
+
+# Need root to write sysfs — re-exec under sudo when needed.
 if [ "$DRYRUN" -eq 0 ] && [ "$(id -u)" -ne 0 ]; then
-    exec sudo "$(readlink -f "$0")" "$@"
+    exec sudo "$SCRIPT_PATH" "$@"
 fi
 
 if [ ! -d "$DRIVER" ]; then
@@ -62,8 +94,8 @@ fi
 matched=0
 acted=0
 for devdir in /sys/bus/usb/devices/*; do
-    [ -r "$devdir/idVendor" ] || continue
-    [ "$(< "$devdir/idVendor")" = "$VID" ] || continue
+    [ -r "$devdir/idVendor" ]          || continue
+    [ "$(< "$devdir/idVendor")" = "$VID" ]  || continue
     [ "$(< "$devdir/idProduct")" = "$PID" ] || continue
     matched=1
     dev=${devdir##*/}
@@ -97,3 +129,144 @@ if [ "$DRYRUN" -eq 1 ]; then
 else
     echo "$PROG: $acted interface(s) unbound."
 fi
+
+;;
+# ===========================================================================
+Darwin)
+# ===========================================================================
+
+APPLE_KEXT="com.apple.driver.AppleUSBFTDI"
+FTDI_VCP_KEXT="com.FTDI.driver.FTDIUSBSerialDriver"
+
+# Convert VID/PID to decimal — ioreg stores them as plain integers.
+VID_DEC=$(( 16#$VID ))
+PID_DEC=$(( 16#$PID ))
+
+# ---------------------------------------------------------------------------
+# 1. Verify a matching device is present via IOKit (ioreg plist output)
+# ---------------------------------------------------------------------------
+macos_list_devices() {
+    # python3 is guaranteed present on macOS (it's part of the Xcode CLT stub)
+    python3 - "$VID_DEC" "$PID_DEC" <<'PYEOF'
+import sys, subprocess, plistlib
+
+vid, pid = int(sys.argv[1]), int(sys.argv[2])
+try:
+    raw = subprocess.check_output(
+        ['ioreg', '-r', '-c', 'IOUSBDevice', '-a'],
+        stderr=subprocess.DEVNULL)
+    devices = plistlib.loads(raw)
+except Exception as e:
+    print(f"  (ioreg query failed: {e})", file=sys.stderr)
+    sys.exit(2)
+
+found = [d for d in devices
+         if d.get('idVendor') == vid and d.get('idProduct') == pid]
+for d in found:
+    name   = d.get('USB Product Name') or d.get('kUSBProductString') or 'FTDI device'
+    serial = d.get('USB Serial Number') or 'no-serial'
+    print(f"  {name}  (0x{vid:04x}:0x{pid:04x}, serial: {serial})")
+sys.exit(0 if found else 1)
+PYEOF
+}
+
+echo "Looking for device $VID:$PID..."
+if ! device_output=$(macos_list_devices 2>&1); then
+    if echo "$device_output" | grep -q "ioreg query failed"; then
+        echo "$PROG: could not query IOKit: $device_output" >&2
+        exit 1
+    fi
+    echo "$PROG: no device matching $VID:$PID is attached." >&2
+    exit 1
+fi
+echo "$device_output"
+
+# ---------------------------------------------------------------------------
+# 2. Find which FTDI kexts are currently loaded
+# ---------------------------------------------------------------------------
+loaded_kexts=()
+for kext in "$APPLE_KEXT" "$FTDI_VCP_KEXT"; do
+    if kextstat 2>/dev/null | grep -qF "$kext"; then
+        loaded_kexts+=("$kext")
+    fi
+done
+
+if [ "${#loaded_kexts[@]}" -eq 0 ]; then
+    echo ""
+    echo "$PROG: no FTDI kext is loaded — device may already be free for WebUSB."
+    echo "  (checked: $APPLE_KEXT)"
+    echo "  (checked: $FTDI_VCP_KEXT)"
+    exit 0
+fi
+
+echo ""
+echo "FTDI kext(s) loaded (to be unloaded):"
+for kext in "${loaded_kexts[@]}"; do
+    echo "  $kext"
+done
+echo ""
+echo "NOTE: kext unload is global — ALL attached FTDI devices will be released,"
+echo "not only $VID:$PID."
+
+if [ "$DRYRUN" -eq 1 ]; then
+    echo ""
+    echo "(dry run — nothing changed)"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Elevate to root when needed
+# ---------------------------------------------------------------------------
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$SCRIPT_PATH" "$@"
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Unload kext(s)
+# ---------------------------------------------------------------------------
+acted=0
+for kext in "${loaded_kexts[@]}"; do
+    echo "Unloading $kext ..."
+    err_file=$(mktemp /tmp/ftdi-kextunload-XXXXXX)
+    if kextunload -b "$kext" 2>"$err_file"; then
+        echo "  unloaded."
+        acted=$((acted + 1))
+    else
+        err=$(<"$err_file")
+        echo "  WARN: could not unload $kext" >&2
+        [ -n "$err" ] && echo "  $err" >&2
+        macos_ver=$(sw_vers -productVersion 2>/dev/null || echo "unknown")
+        if echo "$err" | grep -qiE "operation not permitted|can.t unload|not found"; then
+            cat >&2 <<HINT
+
+  On macOS $macos_ver the system kext '$kext' is protected by SIP
+  and cannot be unloaded at runtime without reducing security.
+
+  Practical alternatives:
+    1. Switch to the Web Serial backend in the terminal app — it works
+       with the FTDI VCP driver in place; no driver swap required.
+    2. Boot into Recovery OS → Utilities → Startup Security Utility →
+       set 'Reduced Security', reboot, then retry.
+    3. If FTDI's own VCP kext is installed separately:
+         sudo kextunload -b $FTDI_VCP_KEXT
+       (third-party kexts can be unloaded even under standard SIP).
+
+HINT
+        fi
+    fi
+    rm -f "$err_file"
+done
+
+echo ""
+echo "$PROG: $acted kext(s) unloaded."
+[ "$acted" -gt 0 ] || exit 1
+
+;;
+# ===========================================================================
+*)
+# ===========================================================================
+echo "$PROG: unsupported OS '$OS' — Linux and macOS are supported." >&2
+exit 1
+;;
+
+esac
