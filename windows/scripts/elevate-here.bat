@@ -4,7 +4,7 @@
 fsutil dirty query %systemdrive% >nul 2>&1
 if %errorLevel% neq 0 (
     echo Elevating privileges...
-    powershell -Command "Start-Process cmd -ArgumentList '/k cd /d ""%~dp0""' -Verb RunAs"
+    powershell -Command "Start-Process cmd -ArgumentList '/k cd /d ""%cd%""' -Verb RunAs"
     exit /b
 )
 
