@@ -97,16 +97,33 @@ int hwid_matches_vidpid(const char *hwid, unsigned short vid, unsigned short pid
 
 /* ── match_devices ───────────────────────────────────────────── */
 
+static int str_iequal(const char *a, const char *b) {
+    if (!a || !b) return (a == b);
+    while (*a && *b) {
+        char ca = (*a >= 'A' && *a <= 'Z') ? (char)(*a + 32) : *a;
+        char cb = (*b >= 'A' && *b <= 'Z') ? (char)(*b + 32) : *b;
+        if (ca != cb) return 0;
+        a++; b++;
+    }
+    return (*a == '\0') && (*b == '\0');
+}
+
 int match_devices(const device_record *recs, int n,
                   unsigned short vid, unsigned short pid,
+                  const char *serial,
                   int *out_idx, int out_cap) {
     int count = 0;
+    int filter_serial = (serial && *serial);
     for (int i = 0; i < n; i++) {
-        if (recs[i].vid == vid && recs[i].pid == pid) {
-            if (count < out_cap)
-                out_idx[count] = i;
-            count++;
+        if (recs[i].vid != vid || recs[i].pid != pid) continue;
+        if (filter_serial) {
+            const char *sn = recs[i].serial;
+            if (!sn || !*sn) continue;
+            if (!str_iequal(sn, serial)) continue;
         }
+        if (count < out_cap)
+            out_idx[count] = i;
+        count++;
     }
     return count;
 }

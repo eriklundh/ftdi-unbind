@@ -19,6 +19,7 @@ typedef enum { ACTION_UNBIND, ACTION_BIND } action_t;
 typedef struct {
     action_t    action;   /* set from the caller, not from argv */
     const char *vidpid;   /* points into argv — not owned, not copied */
+    const char *serial;   /* --serial SN: filter by USB serial number, or NULL */
     int         dry_run;  /* --dry-run: resolve + report, change nothing */
     int         all;      /* --all: act on every matching device */
     int         help;     /* -h / --help */

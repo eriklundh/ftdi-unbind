@@ -5,6 +5,7 @@ int parse_args(int argc, char **argv, action_t action, options *opt) {
     if (!opt) return EXIT_USAGE;
     opt->action  = action;
     opt->vidpid  = NULL;
+    opt->serial  = NULL;
     opt->dry_run = 0;
     opt->all     = 0;
     opt->help    = 0;

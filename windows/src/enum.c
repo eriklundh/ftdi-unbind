@@ -38,6 +38,7 @@ int enum_devices(device_record **out, int *out_n) {
         recs[i].desc      = dup_str(d->desc);
         recs[i].device_id = dup_str(d->device_id);
         recs[i].driver    = d->driver ? _strdup(d->driver) : NULL;
+        recs[i].serial    = dup_str("");  /* populated by feat(enum) commit */
     }
 
     wdi_destroy_list(list);
@@ -52,6 +53,7 @@ void free_device_records(device_record *recs, int n) {
         free((char *)recs[i].desc);
         free((char *)recs[i].device_id);
         free((char *)recs[i].driver);
+        free((char *)recs[i].serial);
     }
     free(recs);
 }

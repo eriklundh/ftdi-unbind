@@ -15,6 +15,7 @@ typedef struct {
     const char     *desc;       /* human-readable description, never NULL */
     const char     *device_id;  /* Windows instance ID, never NULL */
     const char     *driver;     /* current driver name, or NULL if none */
+    const char     *serial;     /* USB serial number, or "" if absent/location-based */
 } device_record;
 
 /*
@@ -53,7 +54,13 @@ int hwid_matches_vidpid(const char *hwid, unsigned short vid, unsigned short pid
  *
  * Safety invariant: only records where BOTH vid and pid match are included.
  * A VID-only or PID-only match is not a match.
+ *
+ * serial: if non-NULL and non-empty, also requires recs[i].serial to be
+ * non-empty and equal (case-insensitive).  NULL or "" means no serial filter.
+ * A device whose serial is "" (absent/location-based) is never matched by a
+ * non-empty serial filter.
  */
 int match_devices(const device_record *recs, int n,
                   unsigned short vid, unsigned short pid,
+                  const char *serial,
                   int *out_idx, int out_cap);

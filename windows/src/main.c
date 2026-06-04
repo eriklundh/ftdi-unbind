@@ -87,7 +87,7 @@ int main(int argc, char **argv) {
     }
 
     int idx[MAX_MATCHES];
-    int count = match_devices(recs, n, vid, pid, idx, MAX_MATCHES);
+    int count = match_devices(recs, n, vid, pid, opt.serial, idx, MAX_MATCHES);
 
     if (count == 0) {
         fprintf(stderr, "no device matching %04x:%04x\n", vid, pid);
