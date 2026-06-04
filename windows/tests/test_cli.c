@@ -69,6 +69,19 @@ static void test_unbind_extra_positional(void)
     assert(run(UNBIND_EXE, av) == 2);
 }
 
+static void test_unbind_serial_no_value(void)
+{
+    /* --serial with no following value */
+    const char *av[] = { UNBIND_EXE, "--serial", NULL };
+    assert(run(UNBIND_EXE, av) == 2);
+}
+
+static void test_unbind_serial_all_conflict(void)
+{
+    const char *av[] = { UNBIND_EXE, "--serial", "A1B2C3D4", "--all", "0403:6015", NULL };
+    assert(run(UNBIND_EXE, av) == 2);
+}
+
 /* ---- ftdi-bind ---------------------------------------------------------- */
 
 static void test_bind_help(void)
@@ -131,6 +144,8 @@ int main(void)
     test_unbind_no_args();
     test_unbind_unknown_flag();
     test_unbind_extra_positional();
+    test_unbind_serial_no_value();
+    test_unbind_serial_all_conflict();
 
     test_bind_help();
     test_bind_about();

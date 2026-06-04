@@ -15,6 +15,9 @@ int parse_args(int argc, char **argv, action_t action, options *opt) {
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--dry-run") == 0) {
             opt->dry_run = 1;
+        } else if (strcmp(argv[i], "--serial") == 0) {
+            if (i + 1 >= argc) return EXIT_USAGE;
+            opt->serial = argv[++i];
         } else if (strcmp(argv[i], "--all") == 0) {
             opt->all = 1;
         } else if (strcmp(argv[i], "--list") == 0) {
@@ -34,6 +37,7 @@ int parse_args(int argc, char **argv, action_t action, options *opt) {
     }
 
     if (opt->help || opt->list || opt->about) return EXIT_OK;
+    if (opt->serial && opt->all) return EXIT_USAGE;  /* mutually exclusive */
     if (!opt->vidpid) return EXIT_USAGE;
     return EXIT_OK;
 }
