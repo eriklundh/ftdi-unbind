@@ -23,9 +23,29 @@ chmod +x ftdi-unbind ftdi-bind
 mkdir -p ~/bin && cp ftdi-unbind ftdi-bind ~/bin/
 ```
 
+## Flags (identical across Linux, macOS, and Windows)
+
+| Flag | Effect |
+|---|---|
+| `--list` | List all USB devices with VID:PID, description, and current driver. No `VID:PID` argument needed. |
+| `--dry-run` / `-n` | Show what would be acted on; change nothing. No root required. |
+| `--all` | Override the ambiguity guard — act even when multiple devices match `VID:PID`. On macOS also required when >1 FTDI device is attached (since kext unload/load is global). |
+| `--about` | Print version and copyright. |
+| `-h` / `--help` | Show usage. |
+
+Exit codes match `ftdi-unbind.exe` / `ftdi-bind.exe`: **0** = OK, **1** = no match or refused ambiguity, **2** = bad arguments.
+
 ## Use
 
-**Always dry-run first.** It shows exactly which devices and interfaces
+List all connected USB devices to find your device's VID:PID and confirm its current driver:
+
+```bash
+ftdi-unbind --list
+# 0403:6015  FT231X USB UART                            [ftdi_sio]
+# 04b4:8613  Cypress FX2                                [(none)]
+```
+
+**Always dry-run first.** It shows exactly which device(s) and interfaces
 (Linux) or kexts (macOS) would be touched, and changes nothing:
 
 ```bash
@@ -43,6 +63,19 @@ ftdi-bind   0403:6015      # re-attach driver → /dev/ttyUSB* (Linux) or
 
 VID:PID is forgiving: `0403:6015`, `0x0403:0x6015`, and `403:6015` all
 normalise to the same thing.
+
+## Ambiguity guard
+
+If two devices with the same VID:PID are attached (e.g. two FT231X boards),
+the scripts refuse to act and list the conflicting devices:
+
+```
+error: 2 devices match 0403:6015 — use --all to act on all, or unplug the others.
+  0403:6015  bus-id: 1-1.2  serial: FT1234AB
+  0403:6015  bus-id: 1-1.4  serial: FT5678CD
+```
+
+Pass `--all` to proceed, or unplug all but the target device first.
 
 ## macOS notes
 
