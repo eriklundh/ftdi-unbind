@@ -358,11 +358,11 @@ Commits:
 - `feat(cli): --serial <value> flag; print serial in --list and ambiguity errors`
 
 Acceptance:
-- [ ] `device_record.serial` populated; `--list` shows it
-- [ ] Ambiguity error names each candidate's serial and hints `--serial`
-- [ ] `--serial <value>` narrows the match; wrong serial → no-match exit (1)
-- [ ] Blank-serial devices cannot be `--serial`-selected; error is clear
-- [ ] Unit tests cover filter / no-filter / mismatch / blank-serial
+- [x] `device_record.serial` populated; `--list` shows it
+- [x] Ambiguity error names each candidate's serial and hints `--serial`
+- [x] `--serial <value>` narrows the match; wrong serial → no-match exit (1)
+- [x] Blank-serial devices cannot be `--serial`-selected; error is clear
+- [x] Unit tests cover filter / no-filter / mismatch / blank-serial
 
 ---
 
