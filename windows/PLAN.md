@@ -510,3 +510,57 @@ Acceptance:
 - [ ] One `scripts/sign-local.ps1` is the single signing entry point shared
       by laptop, GitHub, and GitLab
 - [ ] Pipeline without the credential present builds unsigned without failing
+
+---
+
+## Phase 11 — Serial-number disambiguation (`--serial`)
+
+Branch: `phase/11-serial-select`
+
+**Goal:** When multiple devices share the same VID:PID, allow the user to
+target exactly one by USB serial number, eliminating the two-dongle classroom
+problem without requiring `--all`.
+
+```
+ftdi-unbind.exe 0403:6015 --serial A1B2C3D4
+ftdi-bind.exe   0403:6015 --serial A1B2C3D4
+```
+
+The serial number is part of the Windows device instance ID
+(`USB\VID_0403&PID_6015\A1B2C3D4`) and survives re-plugs to the same
+port, making it a stable, copy-paste-ready selector.
+
+Steps:
+1. Extend `device_record` with a `serial[128]` field; populate it from
+   the libwdi device info (instance-ID suffix) in the `wdi_create_list`
+   adapter.
+2. `--list` prints the serial number alongside VID:PID + description.
+3. Ambiguity error message shows each candidate's serial number and hints
+   `use --serial <value> to select one`.
+4. `match_devices` gains an optional `serial` filter (`NULL` = no filter);
+   `parse_args` wires `--serial <value>` into `opts`.
+5. Unit tests (test-first): serial filter narrows a two-record list to one;
+   `NULL` serial matches all; wrong serial returns zero.
+
+Edge cases:
+- Devices with a blank or missing serial: cannot be selected by `--serial`;
+  the tool reports this clearly and falls back to requiring `--all`.
+- Two devices with identical VID:PID *and* identical serial: still
+  ambiguous; list them and refuse without `--all` (same invariant as today).
+
+Autonomy: fully Claude Code (pure-logic changes + unit tests; the
+enumeration adapter change needs a real device to confirm the field
+populates, so that part is human-verified).
+
+Commits:
+- `test(match): serial filter narrows device list; null matches all`
+- `feat(match): add serial field to device_record and match filter`
+- `feat(enum): populate device_record.serial from instance-ID suffix`
+- `feat(cli): --serial <value> flag; print serial in --list and ambiguity errors`
+
+Acceptance:
+- [ ] `device_record.serial` populated; `--list` shows it
+- [ ] Ambiguity error names each candidate's serial and hints `--serial`
+- [ ] `--serial <value>` narrows the match; wrong serial → no-match exit (1)
+- [ ] Blank-serial devices cannot be `--serial`-selected; error is clear
+- [ ] Unit tests cover filter / no-filter / mismatch / blank-serial
