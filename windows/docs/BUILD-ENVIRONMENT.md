@@ -149,7 +149,7 @@ Record the resulting paths; Phase 0's CMake takes them as cache vars:
 
 ```cmake
 cmake_minimum_required(VERSION 3.20)
-project(ftdi-winusb-rebind C)
+project(ftdi-unbind-windows C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)

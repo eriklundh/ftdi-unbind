@@ -1,4 +1,4 @@
-# PLAN.md — ftdi-winusb-rebind
+# PLAN.md — ftdi-unbind (windows/)
 
 Phased, test-first where the target allows. Pure logic gets classic
 red-green-refactor unit tests; the driver-mutating directions get

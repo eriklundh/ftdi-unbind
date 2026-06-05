@@ -1,4 +1,4 @@
-# CLAUDE.md — ftdi-winusb-rebind
+# CLAUDE.md — ftdi-unbind (windows/)
 
 Project memory for Claude Code. Read this first, every session.
 

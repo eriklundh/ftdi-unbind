@@ -1,4 +1,4 @@
-# ftdi-winusb-rebind
+# ftdi-unbind — Windows (WinUSB)
 
 Two Windows command-line tools that switch an FTDI device between its
 serial (VCP) driver and **WinUSB** — the Windows part of the
@@ -9,9 +9,10 @@ ftdi-unbind.exe 0403:6015     install WinUSB   -> WebUSB / pyftdi ready
 ftdi-bind.exe   0403:6015     restore FTDI VCP -> COM port returns
 ```
 
-The Linux and macOS counterparts (`ftdi-unbind` / `ftdi-bind` in
-`ftdi-rebind-scripts`) share identical flags, exit codes, and VID:PID
-formats — lab instructions read the same on every platform.
+The Linux and macOS counterparts (`ftdi-unbind` / `ftdi-bind` in the
+sibling [`macos-linux/`](../macos-linux/) directory) share identical
+flags, exit codes, and VID:PID formats — lab instructions read the same
+on every platform.
 
 | Platform | Tool | Mechanism | Scope |
 |---|---|---|---|

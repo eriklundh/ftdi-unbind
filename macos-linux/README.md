@@ -1,4 +1,4 @@
-# ftdi-unbind / ftdi-bind
+# ftdi-unbind / ftdi-bind — macOS & Linux scripts
 
 Two small, safe scripts to detach the FTDI kernel driver from a device
 (freeing it for WebUSB / libusb / pyftdi) and to re-attach it afterwards.
