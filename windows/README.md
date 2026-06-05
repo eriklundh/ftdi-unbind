@@ -93,7 +93,7 @@ These are identical to the Linux and macOS `ftdi-bind` / `ftdi-unbind` scripts.
 --dry-run         resolve + report the target; change nothing (no elevation needed)
 --serial SN       target the device with this USB serial number; resolves
                   ambiguity when multiple devices share the same VID:PID
-                  without needing --all  (planned: Phase 7)
+                  without needing --all
 --all             act on every matching device (overrides the ambiguity check)
 -h/--help         show usage
 --about           show copyright information
@@ -124,6 +124,29 @@ ctest --test-dir build -C Release
 The unit tests (`ctest`) do not need admin or hardware.  The driver
 install/restore integration tests do — see
 [`docs/BUILD-ENVIRONMENT.md`](docs/BUILD-ENVIRONMENT.md).
+
+## Why does Windows warn about these binaries?
+
+These executables are unsigned.  Windows SmartScreen shows a blue
+"Windows protected your PC" dialog on first run because the binary has no
+Authenticode signature and no reputation yet.
+
+**To run them today:**
+
+1. Click **More info** in the SmartScreen dialog.
+2. Click **Run anyway**.
+
+This click-through is a one-time action per binary.  Signing will be added
+in a future release (see `docs/SIGNING.md`); once signed and reputation is
+established the dialog disappears automatically.
+
+If you prefer to build from source — which skips the SmartScreen warning on
+your own machine — see the **Build from source** section above.
+
+> **Note for administrators:** Smart App Control and Defender's real-time
+> scanner can also block freshly compiled unsigned binaries during
+> development.  See [`docs/WINDOWS-DEV-SETTINGS.md`](docs/WINDOWS-DEV-SETTINGS.md)
+> for the one-time exclusion steps.
 
 ## Licensing
 
