@@ -24,6 +24,20 @@ ftdi-bind   0403:6015     restore FTDI  -> serial COM/tty port returns
 Each subdirectory has its own README, plan, and tests — start there for
 platform-specific build and usage details.
 
+## Pre-built downloads
+
+**Always check this repository's _Releases_ page first** — published builds of
+the `ftdi-unbind` / `ftdi-bind` utilities for both Windows and Linux/macOS are
+attached there, so you can grab a ready-made binary instead of building from
+source. Where the link lives depends on the host:
+
+- **GitHub:** the **Releases** section in the right-hand sidebar of the
+  repository home page, or append `/releases` to the repository URL.
+- **GitLab:** **Deploy → Releases** in the left-hand sidebar (older instances:
+  **Project → Releases**), or append `/-/releases` to the repository URL.
+
+If no release covers your platform, build from source as below.
+
 ## Quick start
 
 ```sh
