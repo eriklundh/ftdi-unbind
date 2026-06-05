@@ -1,0 +1,419 @@
+#!/usr/bin/env bash
+#
+# ftdi-unbind  [--list] | [--dry-run] [--all | --serial SN] VID:PID
+#
+# Detach the FTDI kernel driver from a USB device matched by VID:PID,
+# freeing it for WebUSB, libusb, or pyftdi.
+#
+#   Linux:  unbinds ftdi_sio per interface via sysfs.
+#   macOS:  unloads AppleUSBFTDI / FTDIUSBSerialDriver kext(s).
+#           kext unload is global — ALL attached FTDI devices are released.
+#
+# Flags:
+#   --list          list all USB devices with serial, driver (no VID:PID)
+#   --dry-run       show what would happen; change nothing
+#   --serial SN     target exactly one device by USB serial number;
+#                   resolves ambiguity without --all
+#                   (macOS: kext unload still affects all FTDI devices)
+#   --all           act even when multiple devices match VID:PID
+#   --about         print version and copyright
+#   -h/--help       show this help
+#
+# Exit codes:  0 = OK   1 = no match / refused ambiguity   2 = bad args
+#
+set -euo pipefail
+
+PROG=${0##*/}
+OS="$(uname -s)"
+[[ "$OS" == "Linux" ]] && shopt -s nullglob
+
+VERSION="0.3.0"
+ABOUT_TEXT="${PROG} ${VERSION}
+(c) 2026 Erik Lundh — The Joy of Engineering, Compelcon AB
+Platforms: Linux, macOS
+Same flags and exit codes as ftdi-unbind.exe (Windows / libwdi)."
+
+usage() {
+    cat >&2 <<EOF
+usage: $PROG [--list] | [--dry-run] [--all | --serial SN] VID:PID
+
+  --list          list all USB devices with serial and current driver
+  --dry-run       show which device(s) would be acted on; change nothing
+  --serial SN     target the device with this USB serial number;
+                  resolves ambiguity without needing --all
+                  macOS: kext unload still releases ALL FTDI devices
+  --all           act on all matching devices (overrides ambiguity guard)
+  -h/--help       show this help
+  --about         show version and copyright
+
+  VID:PID  accepted forms: 0403:6015  0x0403:0x6015  403:6015
+
+  Linux:  unbinds ftdi_sio per interface via sysfs (scoped to VID:PID)
+  macOS:  unloads AppleUSBFTDI / FTDIUSBSerialDriver kext(s) — releases
+          ALL attached FTDI devices, not just the one specified
+
+Restore with:  ftdi-bind VID:PID   (or unplug/replug the device)
+EOF
+    exit 2
+}
+
+# ---------------------------------------------------------------------------
+# Argument parsing — while/shift to handle --serial VALUE
+# ---------------------------------------------------------------------------
+DRYRUN=0; ALL=0; LIST=0; SERIAL=""; VIDPID=""
+ORIG_ARGS=("$@")   # saved for sudo re-exec after parsing consumes $@
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -n|--dry-run) DRYRUN=1; shift ;;
+        --all)        ALL=1; shift ;;
+        --list)       LIST=1; shift ;;
+        --about)      echo "$ABOUT_TEXT"; exit 0 ;;
+        -h|--help)    usage ;;
+        --serial)
+            shift
+            [ $# -gt 0 ] || { echo "$PROG: --serial requires a value" >&2; usage; }
+            SERIAL="$1"; shift ;;
+        --serial=*)   SERIAL="${1#--serial=}"; shift ;;
+        -*)           echo "$PROG: unknown option '$1'" >&2; usage ;;
+        *)            VIDPID="$1"; shift ;;
+    esac
+done
+
+[ -n "$SERIAL" ] && [ "$ALL" -eq 1 ] && {
+    echo "$PROG: --serial and --all are mutually exclusive" >&2; usage
+}
+
+if [ "$LIST" -eq 0 ] && [ -z "$VIDPID" ]; then
+    usage
+fi
+
+# Normalise VID:PID — tr replaces ${var,,} which needs bash 4; macOS ships 3.2.
+if [ -n "$VIDPID" ]; then
+    arg=$(echo "$VIDPID" | tr '[:upper:]' '[:lower:]'); arg="${arg//0x/}"
+    [[ "$arg" == *:* ]] || { echo "$PROG: invalid VID:PID '$VIDPID'" >&2; usage; }
+    vraw="${arg%%:*}"; praw="${arg##*:}"
+    [[ "$vraw" =~ ^[0-9a-f]{1,4}$ && "$praw" =~ ^[0-9a-f]{1,4}$ ]] || \
+        { echo "$PROG: invalid VID:PID '$VIDPID'" >&2; usage; }
+    VID=$(printf '%04x' "0x$vraw")
+    PID=$(printf '%04x' "0x$praw")
+fi
+
+# Portable script path for sudo re-exec (readlink -f is GNU-only).
+SCRIPT_PATH="$(cd "$(dirname "$0")"; pwd -P)/$(basename "$0")"
+
+# ---------------------------------------------------------------------------
+# OS dispatch
+# ---------------------------------------------------------------------------
+case "$OS" in
+
+# ===========================================================================
+Linux)
+# ===========================================================================
+
+# ---- --list ----------------------------------------------------------------
+if [ "$LIST" -eq 1 ]; then
+    printf "%-9s  %-40s  %-20s  [driver]\n" "VID:PID" "description" "serial"
+    printf '%0.s-' {1..90}; echo
+    found=0
+    for devdir in /sys/bus/usb/devices/*; do
+        [ -r "$devdir/idVendor" ] || continue
+        d_vid=$(< "$devdir/idVendor")
+        d_pid=$(< "$devdir/idProduct")
+        d_desc=$(tr   -d '\n' < "$devdir/product" 2>/dev/null || echo "(unknown)")
+        d_serial=$(tr -d '\n' < "$devdir/serial"  2>/dev/null || echo "")
+        d_driver=""; d_dev="${devdir##*/}"
+        for intf in /sys/bus/usb/devices/"$d_dev":*; do
+            [ -L "$intf/driver" ] || continue
+            d_driver=$(basename "$(readlink "$intf/driver")")
+            break
+        done
+        printf "%s:%s  %-40s  %-20s  [%s]\n" \
+            "$d_vid" "$d_pid" "${d_desc:0:40}" "${d_serial:0:20}" "${d_driver:-(none)}"
+        found=1
+    done
+    [ "$found" -eq 1 ] || echo "(no USB devices found)"
+    exit 0
+fi
+
+# ---- unbind ----------------------------------------------------------------
+DRIVER=/sys/bus/usb/drivers/ftdi_sio
+
+if [ "$DRYRUN" -eq 0 ] && [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$SCRIPT_PATH" "${ORIG_ARGS[@]}"
+fi
+
+if [ ! -d "$DRIVER" ]; then
+    echo "$PROG: ftdi_sio not loaded — nothing is bound, nothing to do."
+    exit 0
+fi
+
+# Collect matching devices (by VID:PID, then optional serial filter).
+matched_devs=()
+for devdir in /sys/bus/usb/devices/*; do
+    [ -r "$devdir/idVendor" ]               || continue
+    [ "$(< "$devdir/idVendor")"  = "$VID" ] || continue
+    [ "$(< "$devdir/idProduct")" = "$PID" ] || continue
+    if [ -n "$SERIAL" ]; then
+        dev_serial=$(tr -d '\n' < "$devdir/serial" 2>/dev/null || echo "")
+        if [ -z "$dev_serial" ]; then
+            echo "  skip $(< "$devdir/idVendor"):$(< "$devdir/idProduct") — no serial; --serial cannot select it" >&2
+            continue
+        fi
+        [ "$dev_serial" = "$SERIAL" ] || continue
+    fi
+    matched_devs+=("$devdir")
+done
+
+count="${#matched_devs[@]}"
+if [ "$count" -eq 0 ]; then
+    if [ -n "$SERIAL" ]; then
+        # Check if any device matches VID:PID at all (to give a better error)
+        any=0
+        for devdir in /sys/bus/usb/devices/*; do
+            [ -r "$devdir/idVendor" ]               || continue
+            [ "$(< "$devdir/idVendor")"  = "$VID" ] || continue
+            [ "$(< "$devdir/idProduct")" = "$PID" ] || continue
+            any=1; break
+        done
+        if [ "$any" -eq 1 ]; then
+            echo "$PROG: no device matching $VID:$PID has serial '$SERIAL'." >&2
+        else
+            echo "$PROG: no device matching $VID:$PID is attached." >&2
+        fi
+    else
+        echo "$PROG: no device matching $VID:$PID is attached." >&2
+    fi
+    exit 1
+fi
+
+if [ "$count" -gt 1 ] && [ "$ALL" -eq 0 ] && [ -z "$SERIAL" ]; then
+    echo "$PROG: $count devices match $VID:$PID — use --serial SN to select one, --all to act on all, or unplug the others." >&2
+    for devdir in "${matched_devs[@]}"; do
+        d_dev="${devdir##*/}"
+        d_serial=$(tr -d '\n' < "$devdir/serial" 2>/dev/null || echo "(no serial)")
+        echo "  $VID:$PID  bus-id: $d_dev  serial: $d_serial" >&2
+    done
+    exit 1
+fi
+
+acted=0
+for devdir in "${matched_devs[@]}"; do
+    dev="${devdir##*/}"
+    serial=$(tr -d '\n' < "$devdir/serial" 2>/dev/null || echo "no-serial")
+    echo "device $dev  ($VID:$PID, serial: $serial)"
+    for intf in /sys/bus/usb/devices/"$dev":*; do
+        [ -d "$intf" ] || continue
+        id="${intf##*/}"
+        if [ -e "$DRIVER/$id" ]; then
+            if [ "$DRYRUN" -eq 1 ]; then
+                echo "  would unbind $id"
+            elif echo -n "$id" > "$DRIVER/unbind" 2>/dev/null; then
+                echo "  unbound  $id"
+                acted=$((acted + 1))
+            else
+                echo "  WARN: failed to unbind $id" >&2
+            fi
+        else
+            echo "  skip     $id (not bound to ftdi_sio)"
+        fi
+    done
+done
+
+if [ "$DRYRUN" -eq 1 ]; then
+    echo "(dry run — nothing changed)"
+else
+    echo "$PROG: $acted interface(s) unbound."
+fi
+
+;;
+# ===========================================================================
+Darwin)
+# ===========================================================================
+
+APPLE_KEXT="com.apple.driver.AppleUSBFTDI"
+FTDI_VCP_KEXT="com.FTDI.driver.FTDIUSBSerialDriver"
+FTDI_VID_DEC=1027   # 0x0403
+
+# Query IOKit for USB devices.  Args: [vid_dec [pid_dec [serial]]]
+# Stdout: count on line 1, then one tab-separated record per device.
+macos_ioreg_devices() {
+    python3 - "$@" <<'PYEOF'
+import sys, subprocess, plistlib
+
+fvid    = int(sys.argv[1])          if len(sys.argv) > 1 and sys.argv[1] else None
+fpid    = int(sys.argv[2])          if len(sys.argv) > 2 and sys.argv[2] else None
+fserial = sys.argv[3].strip()       if len(sys.argv) > 3 and sys.argv[3] else None
+
+try:
+    raw = subprocess.check_output(
+        ['ioreg', '-r', '-c', 'IOUSBDevice', '-a'], stderr=subprocess.DEVNULL)
+    devices = plistlib.loads(raw)
+except Exception as e:
+    print(f"error: ioreg query failed: {e}", file=sys.stderr); sys.exit(2)
+
+found = []
+for d in devices:
+    vid = d.get('idVendor',  0)
+    pid = d.get('idProduct', 0)
+    sn  = (d.get('USB Serial Number') or '').strip()
+    if fvid    is not None and vid != fvid:    continue
+    if fpid    is not None and pid != fpid:    continue
+    if fserial is not None and sn  != fserial: continue
+    found.append(d)
+
+print(len(found))
+for d in found:
+    vid  = d.get('idVendor',  0)
+    pid  = d.get('idProduct', 0)
+    name = (d.get('USB Product Name') or d.get('kUSBProductString') or '(unknown)')
+    sn   = (d.get('USB Serial Number') or '').strip() or '(none)'
+    print(f"{vid:04x}:{pid:04x}\t{name}\t{sn}")
+sys.exit(0 if found else 1)
+PYEOF
+}
+
+# ---- --list ----------------------------------------------------------------
+if [ "$LIST" -eq 1 ]; then
+    apple_loaded=0; ftdi_loaded=0
+    kextstat 2>/dev/null | grep -qF "$APPLE_KEXT"    && apple_loaded=1
+    kextstat 2>/dev/null | grep -qF "$FTDI_VCP_KEXT" && ftdi_loaded=1
+
+    python3 - "$apple_loaded" "$ftdi_loaded" "$FTDI_VID_DEC" <<'PYEOF'
+import sys, subprocess, plistlib
+
+apple_loaded = sys.argv[1] == "1"
+ftdi_loaded  = sys.argv[2] == "1"
+ftdi_vid     = int(sys.argv[3])
+
+try:
+    raw = subprocess.check_output(
+        ['ioreg', '-r', '-c', 'IOUSBDevice', '-a'], stderr=subprocess.DEVNULL)
+    devices = plistlib.loads(raw)
+except Exception as e:
+    print(f"error: ioreg query failed: {e}", file=sys.stderr); sys.exit(1)
+
+print(f"{'VID:PID':<9}  {'description':<40}  {'serial':<20}  [driver]")
+print("-" * 90)
+if not devices:
+    print("(no USB devices found)"); sys.exit(0)
+for d in devices:
+    vid  = d.get('idVendor',  0)
+    pid  = d.get('idProduct', 0)
+    name = (d.get('USB Product Name') or d.get('kUSBProductString') or '(unknown)')
+    sn   = (d.get('USB Serial Number') or '').strip() or ''
+    if vid == ftdi_vid:
+        driver = "FTDIUSBSerialDriver" if ftdi_loaded else \
+                 "AppleUSBFTDI"        if apple_loaded else "(none)"
+    else:
+        driver = "(system)"
+    print(f"{vid:04x}:{pid:04x}  {name[:40]:<40}  {sn[:20]:<20}  [{driver}]")
+PYEOF
+    exit 0
+fi
+
+# ---- unbind ----------------------------------------------------------------
+VID_DEC=$(( 16#$VID ))
+PID_DEC=$(( 16#$PID ))
+
+# Verify device present (with optional serial filter).
+echo "Looking for device $VID:$PID${SERIAL:+ serial $SERIAL}..."
+ioreg_out=$(macos_ioreg_devices "$VID_DEC" "$PID_DEC" "$SERIAL") || {
+    if [ -n "$SERIAL" ]; then
+        # Check without serial to distinguish "wrong serial" vs "not attached"
+        any=$(macos_ioreg_devices "$VID_DEC" "$PID_DEC" "" 2>/dev/null | head -1 || echo 0)
+        if [ "$any" -gt 0 ] 2>/dev/null; then
+            echo "$PROG: no device matching $VID:$PID has serial '$SERIAL'." >&2
+        else
+            echo "$PROG: no device matching $VID:$PID is attached." >&2
+        fi
+    else
+        echo "$PROG: no device matching $VID:$PID is attached." >&2
+    fi
+    exit 1
+}
+device_count=$(echo "$ioreg_out" | head -1)
+echo "Found $device_count device(s):"
+echo "$ioreg_out" | tail -n +2 | while IFS=$'\t' read -r vpid name sn; do
+    echo "  $name  ($vpid, serial: $sn)"
+done
+
+# Ambiguity guard (--serial resolves it for single match; --all overrides).
+if [ "$device_count" -gt 1 ] && [ "$ALL" -eq 0 ] && [ -z "$SERIAL" ]; then
+    echo "" >&2
+    echo "$PROG: $device_count devices match $VID:$PID." >&2
+    echo "  Use --serial SN to select one, or --all to release all." >&2
+    exit 1
+fi
+
+# Find loaded FTDI kexts.
+loaded_kexts=()
+for kext in "$APPLE_KEXT" "$FTDI_VCP_KEXT"; do
+    kextstat 2>/dev/null | grep -qF "$kext" && loaded_kexts+=("$kext")
+done
+
+if [ "${#loaded_kexts[@]}" -eq 0 ]; then
+    echo ""
+    echo "$PROG: no FTDI kext is loaded — device may already be free for WebUSB."
+    exit 0
+fi
+
+echo ""
+echo "Kext(s) to unload (releases ALL attached FTDI devices):"
+for kext in "${loaded_kexts[@]}"; do echo "  $kext"; done
+[ -n "$SERIAL" ] && \
+    echo "NOTE: targeting serial $SERIAL — kext unload is still global on macOS."
+
+if [ "$DRYRUN" -eq 1 ]; then
+    echo ""; echo "(dry run — nothing changed)"; exit 0
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$SCRIPT_PATH" "${ORIG_ARGS[@]}"
+fi
+
+acted=0
+for kext in "${loaded_kexts[@]}"; do
+    echo "Unloading $kext ..."
+    err_file=$(mktemp /tmp/ftdi-kextunload-XXXXXX)
+    if kextunload -b "$kext" 2>"$err_file"; then
+        echo "  unloaded."
+        acted=$((acted + 1))
+    else
+        err=$(<"$err_file")
+        echo "  WARN: could not unload $kext" >&2
+        [ -n "$err" ] && echo "  $err" >&2
+        macos_ver=$(sw_vers -productVersion 2>/dev/null || echo "unknown")
+        if echo "$err" | grep -qiE "operation not permitted|can.t unload|not found"; then
+            cat >&2 <<HINT
+
+  On macOS $macos_ver the system kext '$kext' is protected by SIP
+  and cannot be unloaded at runtime without reducing security.
+
+  Practical alternatives:
+    1. Switch to the Web Serial backend in the terminal app — works
+       with the FTDI VCP driver in place; no driver swap required.
+    2. Boot into Recovery OS → Startup Security Utility →
+       set 'Reduced Security', reboot, then retry.
+    3. If FTDI's own VCP kext is installed separately:
+         sudo kextunload -b $FTDI_VCP_KEXT
+
+HINT
+        fi
+    fi
+    rm -f "$err_file"
+done
+
+echo ""
+echo "$PROG: $acted kext(s) unloaded."
+[ "$acted" -gt 0 ] || exit 1
+
+;;
+# ===========================================================================
+*)
+# ===========================================================================
+echo "$PROG: unsupported OS '$OS' — Linux and macOS are supported." >&2
+exit 1
+;;
+
+esac
