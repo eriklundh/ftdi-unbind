@@ -27,12 +27,13 @@ platform-specific build and usage details.
 ## Quick start
 
 ```sh
-git clone <git origin> ftdi-unbind
+git clone git@gitlab.compelcon.se:unified-serial-terminal/ftdi-unbind.git
 cd ftdi-unbind
 ```
 
-Replace `<git origin>` with this repository's remote URL (GitHub, GitLab,
-or wherever you host it).
+The current origin is `git@gitlab.compelcon.se:unified-serial-terminal/ftdi-unbind.git`.
+The project is host-agnostic — it can be mirrored to GitHub or elsewhere;
+elsewhere in the docs the remote is referred to abstractly as `<git origin>`.
 
 - **Windows:** see [`windows/README.md`](windows/README.md) for the libwdi
   build and signing notes.
