@@ -5,8 +5,13 @@
 # Read-only.  Makes no changes.  Does not require root or sudo.
 #
 # Usage:
-#   bash diagnosis.sh          (works anywhere, no chmod needed)
-#   ./diagnosis.sh             (if you have marked it executable first)
+#   bash diagnosis.sh                 search for default VID:PID (0403:6015)
+#   bash diagnosis.sh 0403:6010       search for a specific VID:PID
+#   bash diagnosis.sh 0x0403:0x6015   0x prefix accepted
+#   ./diagnosis.sh                    if marked executable
+#
+# Default VID:PID 0403:6015 = FTDI FT231X / FT232R (used on ULX3S and many
+# other FPGA development boards).
 #
 # Part of the ftdi-unbind toolkit.
 # Repository: gitlab.compelcon.se/unified-serial-terminal/ftdi-unbind
@@ -20,6 +25,25 @@ OS="$(uname -s)"
 [[ "$OS" == "Linux" ]] && shopt -s nullglob 2>/dev/null || true
 
 TOTAL_SECTIONS=5
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  VID:PID argument (optional; default 0403:6015)
+# ─────────────────────────────────────────────────────────────────────────────
+
+VIDPID_ARG="${1:-0403:6015}"
+# Normalise: strip 0x prefix, lowercase
+_norm="$(echo "$VIDPID_ARG" | tr '[:upper:]' '[:lower:]')"
+_norm="${_norm//0x/}"
+if ! echo "$_norm" | grep -qE '^[0-9a-f]{1,4}:[0-9a-f]{1,4}$'; then
+    printf "  Invalid VID:PID '%s'.\n" "$VIDPID_ARG" >&2
+    printf "  Expected format: 0403:6015  (or 403:6015 or 0x0403:0x6015)\n" >&2
+    exit 2
+fi
+_vid_part="${_norm%%:*}"
+_pid_part="${_norm##*:}"
+FILTER_VID="$(printf '%04x' "$(( 16#${_vid_part} ))")"
+FILTER_PID="$(printf '%04x' "$(( 16#${_pid_part} ))")"
+unset _norm _vid_part _pid_part
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Colour helpers (disabled when stdout is not a terminal or TERM is dumb)
@@ -124,9 +148,9 @@ esac
 
 section 2 "$TOTAL_SECTIONS" "FTDI USB DEVICES"
 
-printf "  ${C_GRAY}Scanning for USB devices with FTDI Vendor ID 0x0403...${C_RESET}\n\n"
+printf "  ${C_GRAY}Searching for VID:PID = %s:%s  (pass a different VID:PID as an argument to override)${C_RESET}\n\n" \
+    "$FILTER_VID" "$FILTER_PID"
 
-FTDI_VID="0403"
 FTDI_FOUND=0
 
 case "$OS" in
@@ -135,13 +159,14 @@ case "$OS" in
     Linux)
         for devdir in /sys/bus/usb/devices/*; do
             [ -r "$devdir/idVendor" ] || continue
-            vid="$(tr -d '[:space:]' < "$devdir/idVendor" 2>/dev/null || true)"
-            [ "$vid" = "$FTDI_VID" ] || continue
+            vid="$(tr -d '[:space:]' < "$devdir/idVendor"   2>/dev/null || true)"
+            pid="$(tr -d '[:space:]' < "$devdir/idProduct"  2>/dev/null || echo "????")"
+            [ "$vid" = "$FILTER_VID" ] || continue
+            [ "$pid" = "$FILTER_PID" ] || continue
 
             FTDI_FOUND=$((FTDI_FOUND + 1))
-            pid="$(tr -d '[:space:]' < "$devdir/idProduct"    2>/dev/null || echo "????")  "
-            desc="$(tr  -d '\n'      < "$devdir/product"      2>/dev/null || echo "(unknown)")"
-            serial="$(tr -d '\n'     < "$devdir/serial"       2>/dev/null || echo "(none)")"
+            desc="$(tr  -d '\n' < "$devdir/product" 2>/dev/null || echo "(unknown)")"
+            serial="$(tr -d '\n' < "$devdir/serial" 2>/dev/null || echo "(none)")"
             dev="${devdir##*/}"
 
             # Find the bound driver (first interface that has one)
@@ -153,13 +178,13 @@ case "$OS" in
             done
 
             printf "  ┌─ %s\n" "$desc"
-            printf "  │  VID:PID    : %s:%s\n" "$vid" "${pid%% *}"
+            printf "  │  VID:PID    : %s:%s\n" "$vid" "$pid"
             printf "  │  USB serial : %s\n" "$serial"
             printf "  │  Bus device : %s\n" "$dev"
             printf "  │  Driver     : %s\n" "${driver:-(none)}"
             printf "  └─\n\n"
 
-            DEV_VID_PID="$vid:${pid%% *}"
+            DEV_VID_PID="$vid:$pid"
 
             if [ "${driver:-}" = "ftdi_sio" ]; then
                 # Find the /dev/ttyUSB* node via sysfs
@@ -239,9 +264,9 @@ If you need the serial port: sudo ftdi-bind $DEV_VID_PID"
         done
 
         if [ "$FTDI_FOUND" -eq 0 ]; then
-            note "No FTDI USB devices found."
+            note "No $FILTER_VID:$FILTER_PID device found."
             printf "\n"
-            explain "Linux does not see any device with FTDI's Vendor ID (0x0403).
+            explain "Linux does not see a device with VID:PID $FILTER_VID:$FILTER_PID.
 Possible reasons:
   · Board is not connected, or USB cable carries power only (no data lines).
     Try a different cable — many USB-C cables are charge-only.
@@ -250,19 +275,45 @@ Possible reasons:
   · On some boards a jumper or switch selects USB vs JTAG — check the docs.
 
 Run this script again after replugging."
-            ISSUES+=("No FTDI USB device detected — board may not be connected")
+
+            # Secondary scan: any other VID_0403 devices present?
+            other_count=0
+            for devdir in /sys/bus/usb/devices/*; do
+                [ -r "$devdir/idVendor" ] || continue
+                o_vid="$(tr -d '[:space:]' < "$devdir/idVendor"  2>/dev/null || true)"
+                o_pid="$(tr -d '[:space:]' < "$devdir/idProduct" 2>/dev/null || true)"
+                [ "$o_vid" = "0403" ] || continue
+                [ "$o_vid:$o_pid" = "$FILTER_VID:$FILTER_PID" ] && continue
+                o_desc="$(tr -d '\n' < "$devdir/product" 2>/dev/null || echo "(unknown)")"
+                if [ "$other_count" -eq 0 ]; then
+                    printf "\n"
+                    note "However, other FTDI device(s) with VID 0403 were found:"
+                fi
+                printf "    %s  (%s:%s)\n" "$o_desc" "$o_vid" "$o_pid"
+                other_count=$((other_count + 1))
+            done
+            if [ "$other_count" -gt 0 ]; then
+                printf "\n"
+                explain "  If one of the above is your board, run:
+    bash diagnosis.sh <vid>:<pid>
+  For example:  bash diagnosis.sh 0403:6010"
+            fi
+
+            ISSUES+=("No $FILTER_VID:$FILTER_PID device found — board may not be connected")
         fi
         ;;
 
     # ── macOS ────────────────────────────────────────────────────────────────
     Darwin)
-        FTDI_VID_DEC=1027   # 0x0403
+        FTDI_VID_DEC="$(( 16#${FILTER_VID} ))"
+        FTDI_PID_DEC="$(( 16#${FILTER_PID} ))"
 
         # ioreg enumeration via python3 (same helper used in ftdi-unbind)
-        IOREG_OUT="$(python3 - "$FTDI_VID_DEC" 2>/dev/null <<'PYEOF'
+        IOREG_OUT="$(python3 - "$FTDI_VID_DEC" "$FTDI_PID_DEC" 2>/dev/null <<'PYEOF'
 import sys, subprocess, plistlib
 
 ftdi_vid = int(sys.argv[1]) if len(sys.argv) > 1 else 1027
+ftdi_pid = int(sys.argv[2]) if len(sys.argv) > 2 else None
 try:
     raw = subprocess.check_output(
         ['ioreg', '-r', '-c', 'IOUSBDevice', '-a'], stderr=subprocess.DEVNULL)
@@ -271,7 +322,9 @@ except Exception as e:
     print("error:" + str(e))
     sys.exit(1)
 
-ftdi_devs = [d for d in devices if d.get('idVendor', 0) == ftdi_vid]
+ftdi_devs = [d for d in devices
+             if d.get('idVendor', 0) == ftdi_vid
+             and (ftdi_pid is None or d.get('idProduct', 0) == ftdi_pid)]
 print(len(ftdi_devs))
 for d in ftdi_devs:
     vid  = d.get('idVendor',  0)
@@ -291,16 +344,53 @@ If it is not installed, run: xcode-select --install"
             FTDI_COUNT="${FTDI_COUNT:-0}"
 
             if [ "${FTDI_COUNT:-0}" -eq 0 ] 2>/dev/null; then
-                note "No FTDI USB devices found."
+                note "No $FILTER_VID:$FILTER_PID device found."
                 printf "\n"
-                explain "macOS does not see any device with FTDI's Vendor ID (0x0403).
+                explain "macOS does not see a device with VID:PID $FILTER_VID:$FILTER_PID.
 Possible reasons:
   · Board is not connected, or USB cable is charge-only (no data lines).
   · USB port issue — try a different port or connect directly (no hub).
   · Needs a replug: unplug, wait 5 seconds, plug back in.
 
 Run this script again after replugging."
-                ISSUES+=("No FTDI USB device detected — board may not be connected")
+
+                # Secondary scan: any other FTDI VID 0403 devices?
+                OTHER_OUT="$(python3 - "1027" "" 2>/dev/null <<'PYEOF2'
+import sys, subprocess, plistlib
+ftdi_vid = int(sys.argv[1])
+skip_pid = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] else None
+try:
+    raw = subprocess.check_output(
+        ['ioreg', '-r', '-c', 'IOUSBDevice', '-a'], stderr=subprocess.DEVNULL)
+    devices = plistlib.loads(raw)
+except Exception:
+    sys.exit(1)
+others = [d for d in devices
+          if d.get('idVendor', 0) == ftdi_vid
+          and (skip_pid is None or d.get('idProduct', 0) != skip_pid)]
+print(len(others))
+for d in others:
+    vid  = d.get('idVendor',  0)
+    pid  = d.get('idProduct', 0)
+    name = (d.get('USB Product Name') or d.get('kUSBProductString') or '(unknown)')
+    print(f"{vid:04x}:{pid:04x}\t{name}")
+PYEOF2
+                )" 2>/dev/null || true
+
+                other_count="$(echo "$OTHER_OUT" | head -1)"
+                if [ "${other_count:-0}" -gt 0 ] 2>/dev/null; then
+                    printf "\n"
+                    note "However, other FTDI device(s) with VID 0403 were found:"
+                    echo "$OTHER_OUT" | tail -n +2 | while IFS=$'\t' read -r vpid name; do
+                        printf "    %s  (%s)\n" "$name" "$vpid"
+                    done
+                    printf "\n"
+                    explain "  If one of the above is your board, run:
+    bash diagnosis.sh <vid>:<pid>
+  For example:  bash diagnosis.sh 0403:6010"
+                fi
+
+                ISSUES+=("No $FILTER_VID:$FILTER_PID device found — board may not be connected")
             else
                 FTDI_FOUND="$FTDI_COUNT"
                 printf "  Found %s FTDI device(s):\n\n" "$FTDI_COUNT"

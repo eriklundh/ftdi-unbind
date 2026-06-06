@@ -12,13 +12,42 @@
     The SUMMARY at the end tells you what to do next. The numbered sections
     explain why each finding matters — read as much or as little as you need.
 
+.PARAMETER VidPid
+    USB Vendor ID and Product ID to search for.
+    Accepted forms: 0403:6015   403:6015   0x0403:0x6015
+    Default: 0403:6015  (FTDI FT231X / FT232R — used on the ULX3S and many
+    other FPGA boards).
+
+.EXAMPLE
+    .\diagnosis.ps1
+    .\diagnosis.ps1 0403:6014
+    .\diagnosis.ps1 0x0403:0x6010
+
 .NOTES
     Part of the ftdi-unbind toolkit.
     Repository: gitlab.compelcon.se/unified-serial-terminal/ftdi-unbind
 #>
+param(
+    [string]$VidPid = '0403:6015'
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'SilentlyContinue'
+
+# Normalise VID:PID: strip 0x prefix, pad to 4 hex digits, lower case
+$_raw = $VidPid -replace '(?i)0x','' -replace '\s',''
+if ($_raw -notmatch '^[0-9a-fA-F]{1,4}:[0-9a-fA-F]{1,4}$') {
+    Write-Host ""
+    Write-Host "  Invalid VID:PID '$VidPid'." -ForegroundColor Red
+    Write-Host "  Expected format: 0403:6015  (or 403:6015 or 0x0403:0x6015)" -ForegroundColor Red
+    Write-Host ""
+    exit 2
+}
+$_parts = $_raw -split ':'
+$VID = $_parts[0].PadLeft(4,'0').ToLower()
+$PID = $_parts[1].PadLeft(4,'0').ToLower()
+$VID_UP = $VID.ToUpper()
+$PID_UP = $PID.ToUpper()
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Output helpers
@@ -89,17 +118,17 @@ Write-Host ""
 
 Write-Section 2 6 "FTDI USB DEVICES"
 
-Write-Host "  Scanning for devices with FTDI Vendor ID 0x0403 (VID_0403)..." -ForegroundColor DarkGray
+Write-Host "  Searching for VID:PID = $VID`:$PID  (pass a different VID:PID as an argument to override)" -ForegroundColor DarkGray
 Write-Host ""
 
 $allDevices  = Get-PnpDevice -PresentOnly
-$ftdiDevices = @($allDevices | Where-Object { $_.InstanceId -like 'USB\VID_0403*' })
+$ftdiDevices = @($allDevices | Where-Object { $_.InstanceId -like "USB\VID_$VID_UP&PID_$PID_UP*" })
 
 if ($ftdiDevices.Count -eq 0) {
-    Write-Note "No FTDI USB devices found."
+    Write-Note "No $VID`:$PID device found."
     Write-Host ""
     Write-Explain @"
-Windows does not see any device with FTDI's Vendor ID right now.
+Windows does not see a device with VID:PID $VID`:$PID right now.
 Possible reasons:
   · The board is not plugged in.
   · The USB cable carries power only — no data lines. This is common
@@ -114,7 +143,26 @@ Possible reasons:
 
 If you just plugged the board in, wait 5 seconds and run this script again.
 "@
-    $script:Issues.Add("No FTDI USB device detected — board may not be connected or recognised")
+    # Secondary scan: any OTHER FTDI VID_0403 devices present?
+    $otherFtdi = @($allDevices | Where-Object {
+        $_.InstanceId -like 'USB\VID_0403*' -and
+        $_.InstanceId -notlike "USB\VID_$VID_UP&PID_$PID_UP*"
+    })
+    if ($otherFtdi.Count -gt 0) {
+        Write-Host ""
+        Write-Note "However, $($otherFtdi.Count) other FTDI device(s) with VID 0403 were found:"
+        foreach ($o in $otherFtdi) {
+            $om   = [regex]::Match($o.InstanceId, 'VID_([0-9A-Fa-f]{4})&PID_([0-9A-Fa-f]{4})')
+            $ovid = if ($om.Success) { $om.Groups[1].Value.ToLower() } else { "????" }
+            $opid = if ($om.Success) { $om.Groups[2].Value.ToLower() } else { "????" }
+            $oname = if ($o.FriendlyName) { $o.FriendlyName } else { "(unnamed)" }
+            Write-Host "    $oname  ($ovid`:$opid)" -ForegroundColor DarkGray
+        }
+        Write-Host ""
+        Write-Explain "  If one of these is your board, run:  .\diagnosis.ps1 <vid>:<pid>"
+        Write-Explain "  For example:  .\diagnosis.ps1 0403:6014"
+    }
+    $script:Issues.Add("No $VID`:$PID device found — board may not be connected or recognised")
 } else {
     foreach ($dev in $ftdiDevices) {
         $iid  = $dev.InstanceId
@@ -133,7 +181,7 @@ If you just plugged the board in, wait 5 seconds and run this script again.
 
         Write-Host "  ┌─ $name"
         Write-Host "  │  Instance ID : $iid" -ForegroundColor DarkGray
-        Write-Host "  │  VID:PID     : 0403:$pid4"
+        Write-Host "  │  VID:PID     : $VID`:$pid4"
         Write-Host "  │  USB serial  : $usbSerial"
         Write-Host "  │  Device class: $cls"
         Write-Host "  │  Status      : $sts"
@@ -214,8 +262,8 @@ This switch is done intentionally by ftdi-unbind.exe (or the Zadig tool).
   Alternatively, the unified-serial-terminal project (serial communication
   without driver swapping) may avoid the need to rebind at all.
 "@
-                $script:Issues.Add("0403:$pid4 — WinUSB driver active, no COM port")
-                $script:Actions.Add("To restore the COM port: run ftdi-bind.exe 0403:$pid4  (as Administrator)")
+                $script:Issues.Add("$VID`:$pid4 — WinUSB driver active, no COM port")
+                $script:Actions.Add("To restore the COM port: run ftdi-bind.exe $VID`:$pid4  (as Administrator)")
             }
 
             default {
@@ -240,7 +288,7 @@ Typical causes:
 
 See SUMMARY for the ftdi-doctor.exe download link.
 "@
-                    $script:Issues.Add("0403:$pid4 — FTDI device detected but no driver loaded")
+                    $script:Issues.Add("$VID`:$pid4 — FTDI device detected but no driver loaded")
                     $script:Actions.Add("Run ftdi-doctor.exe --diagnose to check the driver store, then follow its instructions")
                 } else {
                     Write-Note "Device is in class '$cls' — unexpected for an FTDI serial device"
