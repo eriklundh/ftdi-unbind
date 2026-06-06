@@ -1,5 +1,28 @@
 # ftdi-unbind
 
+## Something not working? Start with the diagnosis script
+
+If your FPGA board, FTDI USB adapter, or serial port is not behaving as
+expected — no COM port, device not recognised, wrong driver, high port
+numbers, connection refused — **run the diagnosis script first.**
+
+It is **read-only and safe**. It makes no changes to your system and does
+not require Administrator or sudo. It checks your device state, explains
+what it finds in plain language, and tells you exactly what to do next.
+
+| Your platform | Command |
+|---|---|
+| Windows — PowerShell | `.\diagnosis.ps1` |
+| Windows — Command Prompt | `diagnosis.cmd` |
+| Linux or macOS | `bash diagnosis.sh` |
+
+All three scripts are in the root of this repository. The output ends
+with a **SUMMARY** section listing any issues found and the specific
+commands to fix them. The sections above the summary explain the *why*
+— read as much or as little as you need.
+
+---
+
 Cross-platform tools for **rebinding FTDI USB devices** — switching an
 FTDI chip between its serial (VCP/`ftdi_sio`) driver and a raw-USB mode
 (**WinUSB** on Windows, an unbound kernel driver on Linux/macOS) so the
