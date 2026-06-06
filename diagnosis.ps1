@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     FTDI USB device diagnostic for Windows.
@@ -43,11 +43,11 @@ if ($_raw -notmatch '^[0-9a-fA-F]{1,4}:[0-9a-fA-F]{1,4}$') {
     Write-Host ""
     exit 2
 }
-$_parts = $_raw -split ':'
-$VID = $_parts[0].PadLeft(4,'0').ToLower()
-$PID = $_parts[1].PadLeft(4,'0').ToLower()
-$VID_UP = $VID.ToUpper()
-$PID_UP = $PID.ToUpper()
+$_parts  = $_raw -split ':'
+$VID     = $_parts[0].PadLeft(4,'0').ToLower()
+$UsbPid  = $_parts[1].PadLeft(4,'0').ToLower()
+$VID_UP  = $VID.ToUpper()
+$PID_UP  = $UsbPid.ToUpper()
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Output helpers
@@ -118,17 +118,17 @@ Write-Host ""
 
 Write-Section 2 6 "FTDI USB DEVICES"
 
-Write-Host "  Searching for VID:PID = $VID`:$PID  (pass a different VID:PID as an argument to override)" -ForegroundColor DarkGray
+Write-Host "  Searching for VID:PID = $VID`:$UsbPid  (pass a different VID:PID as an argument to override)" -ForegroundColor DarkGray
 Write-Host ""
 
 $allDevices  = Get-PnpDevice -PresentOnly
 $ftdiDevices = @($allDevices | Where-Object { $_.InstanceId -like "USB\VID_$VID_UP&PID_$PID_UP*" })
 
 if ($ftdiDevices.Count -eq 0) {
-    Write-Note "No $VID`:$PID device found."
+    Write-Note "No $VID`:$UsbPid device found."
     Write-Host ""
     Write-Explain @"
-Windows does not see a device with VID:PID $VID`:$PID right now.
+Windows does not see a device with VID:PID $VID`:$UsbPid right now.
 Possible reasons:
   · The board is not plugged in.
   · The USB cable carries power only — no data lines. This is common
@@ -162,7 +162,7 @@ If you just plugged the board in, wait 5 seconds and run this script again.
         Write-Explain "  If one of these is your board, run:  .\diagnosis.ps1 <vid>:<pid>"
         Write-Explain "  For example:  .\diagnosis.ps1 0403:6014"
     }
-    $script:Issues.Add("No $VID`:$PID device found — board may not be connected or recognised")
+    $script:Issues.Add("No $VID`:$UsbPid device found -- board may not be connected or recognised")
 } else {
     foreach ($dev in $ftdiDevices) {
         $iid  = $dev.InstanceId
