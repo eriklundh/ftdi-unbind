@@ -18,10 +18,10 @@
 #   - signing.metadata.json in the repo root (see signing.metadata.json.template)
 
 param(
-    [Parameter(Mandatory, ValueFromRemainingArguments)]
-    [string[]]$Files,
+    [string]$MetadataFile = "$PSScriptRoot\..\signing.metadata.json",
 
-    [string]$MetadataFile = "$PSScriptRoot\..\signing.metadata.json"
+    [Parameter(Mandatory, Position = 0, ValueFromRemainingArguments)]
+    [string[]]$Files
 )
 
 $ErrorActionPreference = 'Stop'
