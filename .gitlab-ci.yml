@@ -1,0 +1,41 @@
+default:
+  tags: [rpi5]
+
+variables:
+  FTDI_VID_PID: "0403:6015"
+
+stages:
+  - diagnose
+  - cycle
+
+# Run diagnosis.sh and capture its output. Always exits 0 (diagnostic, not
+# assertive) — the job serves as a live snapshot of device state in the CI log.
+diagnose:
+  stage: diagnose
+  script:
+    - bash diagnosis.sh "$FTDI_VID_PID"
+
+# Unbind ftdi_sio, verify the tty node disappears, rebind, verify it returns.
+# after_script always attempts a rebind so the runner host stays usable even
+# if the test fails midway.
+bind-unbind-cycle:
+  stage: cycle
+  script:
+    - sudo macos-linux/ftdi-unbind "$FTDI_VID_PID"
+    - sleep 1
+    - |
+      if ls /dev/ttyUSB* 2>/dev/null | grep -q .; then
+        echo "FAIL: ttyUSB* still present after unbind"
+        exit 1
+      fi
+    - echo "PASS: no ttyUSB* after unbind"
+    - sudo macos-linux/ftdi-bind "$FTDI_VID_PID"
+    - sleep 1
+    - |
+      if ! ls /dev/ttyUSB* 2>/dev/null | grep -q .; then
+        echo "FAIL: no ttyUSB* after rebind"
+        exit 1
+      fi
+    - echo "PASS: ttyUSB* present after rebind"
+  after_script:
+    - sudo macos-linux/ftdi-bind "$FTDI_VID_PID" 2>/dev/null || true
