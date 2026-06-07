@@ -204,7 +204,12 @@ Typical settings for FPGA lab work: 115200 baud, 8N1.
 If the terminal app says 'Permission denied': see Section 4 (user groups).
 If the terminal app says 'Device or resource busy': another app has the port open.
 If you need a terminal that works without driver switching at all, the
-unified-serial-terminal (sister project) talks over this driver directly."
+unified-serial-terminal (sister project) talks over this driver directly.
+
+NOTE: If your goal is FPGA programming with a WebUSB or pyftdi tool, the
+serial driver must be unbound first so the tool can claim the device directly:
+  sudo ftdi-unbind $DEV_VID_PID
+Run ftdi-bind (or replug the board) afterwards to restore the serial port."
                 else
                     ok "ftdi_sio driver active (tty node not yet visible in sysfs — try ls /dev/ttyUSB*)"
                 fi
@@ -782,13 +787,17 @@ printf "  ${C_DCYAN} SUMMARY${C_RESET}\n"
 printf "  ${C_DCYAN}%s${C_RESET}\n\n" "═══════════════════════════════════════════════════════════════════"
 
 if [ "${#ISSUES[@]}" -eq 0 ]; then
-    printf "  ${C_GREEN}Everything looks OK.${C_RESET}\n\n"
-    explain "Your FTDI device appears to be in a normal state.
-If you are still having trouble connecting:
+    printf "  ${C_GREEN}Everything looks OK for serial use.${C_RESET}\n\n"
+    explain "Your FTDI device is in a normal state for serial communication.
+If you are still having trouble connecting over serial:
   · Double-check baud rate (usually 115200 for FPGA lab work)
   · Make sure no other app has the port open
   · Try unplugging and replugging the USB cable
-  · Try a different USB cable (many are charge-only — no data lines)"
+  · Try a different USB cable (many are charge-only — no data lines)
+
+If your goal is FPGA programming with a WebUSB or pyftdi tool (not serial),
+the ftdi_sio driver must be unbound first — see Section 2 for the tty/driver
+state and run: sudo ftdi-unbind <VID:PID>"
 else
     printf "  ${C_YELLOW}Issues found:${C_RESET}\n\n"
     i=1
