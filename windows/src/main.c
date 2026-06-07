@@ -13,7 +13,8 @@
 
 #define MAX_MATCHES  64
 
-#define ABOUT_TEXT "(c) 2026 Erik Lundh - The Joy of Engineering Compelcon AB\n"
+#define ABOUT_TEXT "(c) 2026 Erik Lundh \xe2\x80\x94 The Joy of Engineering, Compelcon AB\n" \
+                   "https://github.com/eriklundh/ftdi-unbind\n"
 
 static void print_usage(const char *prog) {
     fprintf(stderr,

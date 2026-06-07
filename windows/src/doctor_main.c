@@ -102,7 +102,8 @@ static int scan_ftdi_oem_infs(ftdi_inf_t *entries, int max)
     return count;
 }
 
-#define ABOUT_TEXT "(c) 2026 Erik Lundh - The Joy of Engineering Compelcon AB\n"
+#define ABOUT_TEXT "(c) 2026 Erik Lundh \xe2\x80\x94 The Joy of Engineering, Compelcon AB\n" \
+                   "https://github.com/eriklundh/ftdi-unbind\n"
 
 /* ── print_usage ─────────────────────────────────────────────────────── */
 

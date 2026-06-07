@@ -32,6 +32,7 @@ OS="$(uname -s)"
 VERSION="0.3.0"
 ABOUT_TEXT="${PROG} ${VERSION}
 (c) 2026 Erik Lundh — The Joy of Engineering, Compelcon AB
+https://github.com/eriklundh/ftdi-unbind
 Platforms: Linux, macOS
 Same flags and exit codes as ftdi-bind.exe (Windows / libwdi)."
 

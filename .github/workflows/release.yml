@@ -70,7 +70,7 @@ jobs:
       # ── Sign (gated — no-ops when Azure secrets absent) ──────────────────
       - name: Azure login (OIDC)
         if: ${{ env.AZURE_CLIENT_ID != '' }}
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id:       ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
@@ -84,6 +84,10 @@ jobs:
       - name: Sign exes (Azure Artifact Signing)
         if: ${{ env.AZURE_CLIENT_ID != '' }}
         uses: azure/artifact-signing-action@v0
+        # v0 is the stable release as of the service rename (Jan 2026).
+        # The shared sign-local.ps1 can be used as a fallback if the action
+        # has not yet published a v1/v2 tag: add a step that calls
+        #   pwsh -File scripts/sign-local.ps1 windows\build\Release\*.exe
         with:
           endpoint:                   https://weu.codesigning.azure.net/
           code-signing-account-name:  compelcon-signing

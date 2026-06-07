@@ -64,13 +64,16 @@ If no release covers your platform, build from source as below.
 ## Quick start
 
 ```sh
+# GitHub mirror (public):
+git clone https://github.com/eriklundh/ftdi-unbind.git
+# GitLab canonical:
 git clone git@gitlab.compelcon.se:unified-serial-terminal/ftdi-unbind.git
 cd ftdi-unbind
 ```
 
-The current origin is `git@gitlab.compelcon.se:unified-serial-terminal/ftdi-unbind.git`.
-The project is host-agnostic — it can be mirrored to GitHub or elsewhere;
-elsewhere in the docs the remote is referred to abstractly as `<git origin>`.
+The canonical origin is `git@gitlab.compelcon.se:unified-serial-terminal/ftdi-unbind.git`;
+the project is mirrored publicly at **https://github.com/eriklundh/ftdi-unbind**.
+Elsewhere in the docs the remote is referred to abstractly as `<git origin>`.
 
 - **Windows:** see [`windows/README.md`](windows/README.md) for the libwdi
   build and signing notes.
