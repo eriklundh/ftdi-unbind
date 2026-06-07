@@ -74,7 +74,11 @@ paths avoid even that).
 
 ## The toolchain (same on every Windows machine that signs)
 
-1. `winget install -e --id Microsoft.Azure.TrustedSigningClientTools`
+1. `winget install -e --id Microsoft.AzureCLI`
+   — installs the Azure CLI (`az`), needed for `az login` (interactive
+   laptop auth). Note: the package ID is `Microsoft.AzureCLI` (no dot
+   between Azure and CLI) — `Microsoft.Azure.CLI` returns "no package found".
+2. `winget install -e --id Microsoft.Azure.TrustedSigningClientTools`
    — installs the `Microsoft.Trusted.Signing.Client` dlib
    (`Azure.CodeSigning.Dlib.dll`), a compatible **64-bit** `signtool`, the
    .NET runtime, and the VC++ deps in one shot.
@@ -83,7 +87,7 @@ paths avoid even that).
    filter" / "parameter is incorrect". Use the **x64 Native Tools** prompt
    or a full path like
    `C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe`.
-3. The `/dlib` + `/dmdf` parameters need a recent SDK signtool
+4. The `/dlib` + `/dmdf` parameters need a recent SDK signtool
    (10.0.26100+). Older Windows hosts can choke on the new signtool.
 
 The one signing command (identical across contexts; only auth differs):

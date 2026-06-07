@@ -432,9 +432,12 @@ Steps (human, on the laptop):
    identity is an EU *individual* rather than an *organization*, stop:
    Public Trust is not available to EU individuals (see the doc) — you'll
    need an org identity.
-2. Install the **Trusted Signing Client Tools** (the dlib + a current
-   `signtool`):
-   `winget install -e --id Microsoft.Azure.TrustedSigningClientTools`.
+2. Install the **Azure CLI** and **Trusted Signing Client Tools**:
+   ```
+   winget install -e --id Microsoft.AzureCLI
+   winget install -e --id Microsoft.Azure.TrustedSigningClientTools
+   ```
+   Note: Azure CLI ID is `Microsoft.AzureCLI` (no dot) — `Microsoft.Azure.CLI` returns "no package found".
 3. Assign yourself the **"Trusted Signing Certificate Profile Signer"**
    role on the signing account (your user, not a service principal yet).
 4. `az login`, then run the `signtool … /dlib … /dmdf metadata.json`
