@@ -80,8 +80,12 @@ paths avoid even that).
    between Azure and CLI) — `Microsoft.Azure.CLI` returns "no package found".
 2. `winget install -e --id Microsoft.Azure.TrustedSigningClientTools`
    — installs the `Microsoft.Trusted.Signing.Client` dlib
-   (`Azure.CodeSigning.Dlib.dll`), a compatible **64-bit** `signtool`, the
-   .NET runtime, and the VC++ deps in one shot.
+   (`Azure.CodeSigning.Dlib.dll`), the .NET runtime, and VC++ deps.
+   **v1.0.0+** installs the dlib to
+   `%LOCALAPPDATA%\Microsoft\MicrosoftTrustedSigningClientTools\`
+   (no space, no dot — different from the 0.1.x path
+   `%LOCALAPPDATA%\Microsoft\Azure.CodeSigning.Dlib\`).
+   `sign-local.ps1` searches both paths automatically.
 2. **Use the 64-bit `signtool`.** The classic failure is the *Developer
    Command Prompt* defaulting to 32-bit signtool → "0 certs after EKU
    filter" / "parameter is incorrect". Use the **x64 Native Tools** prompt

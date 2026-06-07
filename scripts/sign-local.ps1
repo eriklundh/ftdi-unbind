@@ -33,12 +33,15 @@ if (-not (Test-Path $MetadataFile)) {
 # Locate the Azure CodeSigning dlib.
 # The TrustedSigningClientTools package installs it to the .NET tools path.
 $dlibSearch = @(
+    # v1.0.0+ (MSI, winget Microsoft.Azure.TrustedSigningClientTools >= 1.0.0)
+    "$env:LOCALAPPDATA\Microsoft\MicrosoftTrustedSigningClientTools\Azure.CodeSigning.Dlib.dll",
+    # v0.1.x (older MSI / manual NuGet install)
     "$env:LOCALAPPDATA\Microsoft\Azure.CodeSigning.Dlib\Azure.CodeSigning.Dlib.dll",
     "$env:PROGRAMFILES\Microsoft\Azure Trusted Signing Client\bin\x64\Azure.CodeSigning.Dlib.dll"
 )
 $dlib = $dlibSearch | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $dlib) {
-    # Try a glob in the NuGet global packages cache (dotnet tools install path).
+    # Fallback: NuGet global packages cache (dotnet tool install path)
     $dlib = Get-ChildItem "$env:USERPROFILE\.nuget\packages\microsoft.trusted.signing.client" `
         -Recurse -Filter 'Azure.CodeSigning.Dlib.dll' -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
