@@ -234,6 +234,25 @@ if [ "$DRYRUN" -eq 1 ]; then
     echo "(dry run — nothing changed)"
 else
     echo "$PROG: $acted interface(s) bound."
+    if [ "$acted" -gt 0 ]; then
+        # Give udev a moment to create the device node, then report it.
+        sleep 0.5
+        tty_nodes=""
+        for devdir in "${matched_devs[@]}"; do
+            dev="${devdir##*/}"
+            for intf in /sys/bus/usb/devices/"$dev":*; do
+                for ttydir in "$intf"/tty/tty*; do
+                    [ -e "$ttydir" ] && tty_nodes="$tty_nodes /dev/$(basename "$ttydir")"
+                done
+            done
+        done
+        if [ -n "$tty_nodes" ]; then
+            echo "$PROG: serial port(s) ready:$tty_nodes"
+            echo "  If the port number changed from your last session:"
+            echo "  · Refresh the browser page and re-select the port in the app."
+            echo "  · Or unplug/replug the board to get a predictable port number."
+        fi
+    fi
 fi
 
 ;;
