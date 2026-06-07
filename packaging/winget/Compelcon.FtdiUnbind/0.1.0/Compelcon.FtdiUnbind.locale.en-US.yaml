@@ -1,0 +1,34 @@
+# winget manifest: default locale file
+# Compelcon.FtdiUnbind v0.1.0
+PackageIdentifier: Compelcon.FtdiUnbind
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: Compelcon
+PublisherUrl: https://github.com/compelcon
+PublisherSupportUrl: https://github.com/compelcon/ftdi-unbind/issues
+PackageName: ftdi-unbind
+PackageUrl: https://github.com/compelcon/ftdi-unbind
+License: GPL-2.0-or-later
+LicenseUrl: https://github.com/compelcon/ftdi-unbind/blob/main/LICENSE
+ShortDescription: Unbind/rebind the OS FTDI serial driver to give libusb exclusive access
+Description: |-
+  ftdi-unbind switches an FTDI USB device from the Windows VCP (COM port)
+  driver to WinUSB, giving libusb-based tools (pyftdi, WebUSB) exclusive
+  access. ftdi-bind reverses the operation. ftdi-doctor lists attached FTDI
+  devices and their current driver state.
+
+  All three tools share a common CLI: --list, --dry-run, --serial SN,
+  --all, --about, -h/--help. VID:PID format: 0403:6015.
+
+  Signing: binaries are signed with Azure Artifact Signing (OIDC, cloud HSM).
+Moniker: ftdi-unbind
+Tags:
+  - ftdi
+  - usb
+  - serial
+  - winusb
+  - libusb
+  - driver
+ReleaseNotesUrl: https://github.com/compelcon/ftdi-unbind/releases/tag/v0.1.0
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

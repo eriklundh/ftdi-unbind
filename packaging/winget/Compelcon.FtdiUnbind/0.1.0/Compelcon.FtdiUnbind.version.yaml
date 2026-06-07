@@ -1,0 +1,8 @@
+# winget manifest: version file
+# Compelcon.FtdiUnbind v0.1.0
+# See https://github.com/microsoft/winget-pkgs for the schema.
+PackageIdentifier: Compelcon.FtdiUnbind
+PackageVersion: 0.1.0
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

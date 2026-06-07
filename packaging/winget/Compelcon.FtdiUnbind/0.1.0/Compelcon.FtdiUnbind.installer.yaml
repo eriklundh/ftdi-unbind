@@ -1,0 +1,31 @@
+# winget manifest: installer file
+# Compelcon.FtdiUnbind v0.1.0
+#
+# Uses the "portable" installer type — winget unpacks the zip and adds
+# each exe to the PATH via a shim in %LOCALAPPDATA%\Microsoft\WinGet\Packages.
+# No MSI, no admin required for install (admin is still required when the
+# tools themselves install/remove drivers at runtime).
+#
+# The InstallerUrl and InstallerSha256 below are updated automatically by
+# the release workflow on every v* tag push.
+PackageIdentifier: Compelcon.FtdiUnbind
+PackageVersion: 0.1.0
+InstallerLocale: en-US
+InstallerType: zip
+InstallModes:
+  - interactive
+  - silent
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/compelcon/ftdi-unbind/releases/download/v0.1.0/ftdi-tools-v0.1.0-windows-x64.zip
+    InstallerSha256: PLACEHOLDER_SHA256_UPDATED_BY_RELEASE_WORKFLOW
+    NestedInstallerType: portable
+    NestedInstallerFiles:
+      - RelativeFilePath: ftdi-unbind.exe
+        PortableCommandAlias: ftdi-unbind
+      - RelativeFilePath: ftdi-bind.exe
+        PortableCommandAlias: ftdi-bind
+      - RelativeFilePath: ftdi-doctor.exe
+        PortableCommandAlias: ftdi-doctor
+ManifestType: installer
+ManifestVersion: 1.6.0

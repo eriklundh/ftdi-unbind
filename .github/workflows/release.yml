@@ -1,0 +1,205 @@
+# .github/workflows/release.yml
+#
+# Build, (optionally) sign, and publish a GitHub Release on every v* tag.
+#
+# Windows exes are built on a GitHub-hosted windows-latest runner.
+# Signing uses Azure Artifact Signing via OIDC — no long-lived secret.
+# The signing steps are GATED: they no-op when AZURE_CLIENT_ID is absent,
+# so forks build cleanly unsigned without any credential access.
+#
+# Artifacts attached to the release:
+#   ftdi-tools-<version>-windows-x64.zip   (all three exes, signed when possible)
+#   ftdi-tools-<version>-linux-macos.tar.gz (bash scripts for Linux and macOS)
+#   SHA256SUMS
+#   SHA256SUMS.sig                          (GPG — when GPG_PRIVATE_KEY is set)
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write    # create release + upload assets
+  id-token: write    # fetch OIDC token for Azure signing
+
+jobs:
+  # ── Windows: build + sign ──────────────────────────────────────────────────
+  build-windows:
+    name: Build Windows exes
+    runs-on: windows-latest
+
+    env:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── libwdi: restore from cache or build ──────────────────────────────
+      - name: Cache libwdi
+        id: cache-libwdi
+        uses: actions/cache@v4
+        with:
+          path: libwdi-out
+          # Key includes the libwdi version pinned in build-libwdi.ps1.
+          key: libwdi-v1.5.0-${{ runner.os }}-${{ hashFiles('scripts/build-libwdi.ps1') }}
+
+      - name: Build libwdi (cache miss)
+        if: steps.cache-libwdi.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: pwsh -File scripts/build-libwdi.ps1 -LibwdiDir libwdi-src -OutDir libwdi-out
+
+      # ── Build ftdi tools ─────────────────────────────────────────────────
+      - name: Configure CMake
+        shell: cmd
+        run: |
+          cmake -S windows -B windows\build ^
+            -G "Visual Studio 17 2022" -A x64 ^
+            -DLIBWDI_INCLUDE_DIR=%CD%\libwdi-out\include ^
+            -DLIBWDI_LIB=%CD%\libwdi-out\lib\libwdi.lib
+
+      - name: Build Release
+        shell: cmd
+        run: cmake --build windows\build --config Release
+
+      - name: Run unit tests (no admin, no device)
+        shell: cmd
+        run: ctest --test-dir windows\build -C Release --output-on-failure
+
+      # ── Sign (gated — no-ops when Azure secrets absent) ──────────────────
+      - name: Azure login (OIDC)
+        if: ${{ env.AZURE_CLIENT_ID != '' }}
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install Azure Artifact Signing tools
+        if: ${{ env.AZURE_CLIENT_ID != '' }}
+        shell: pwsh
+        run: winget install -e --id Microsoft.Azure.TrustedSigningClientTools --silent --accept-source-agreements --accept-package-agreements
+
+      - name: Sign exes (Azure Artifact Signing)
+        if: ${{ env.AZURE_CLIENT_ID != '' }}
+        uses: azure/artifact-signing-action@v0
+        with:
+          endpoint:                   https://weu.codesigning.azure.net/
+          code-signing-account-name:  compelcon-signing
+          certificate-profile-name:   ftdi-tools
+          files-folder:               windows\build\Release
+          files-folder-filter:        exe
+          file-digest:                SHA256
+          timestamp-rfc3161:          http://timestamp.acs.microsoft.com
+          timestamp-digest:           SHA256
+
+      # ── Package ──────────────────────────────────────────────────────────
+      - name: Determine version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = '${{ github.ref_name }}'   # e.g. v0.3.0
+          echo "tag=$v" >> $env:GITHUB_OUTPUT
+          echo "ver=${v.TrimStart('v')}" >> $env:GITHUB_OUTPUT
+
+      - name: Create Windows zip
+        shell: pwsh
+        run: |
+          $zip = "ftdi-tools-${{ steps.ver.outputs.tag }}-windows-x64.zip"
+          Compress-Archive -Path `
+            windows\build\Release\ftdi-unbind.exe, `
+            windows\build\Release\ftdi-bind.exe, `
+            windows\build\Release\ftdi-doctor.exe `
+            -DestinationPath $zip
+          echo "ZIP=$zip" >> $env:GITHUB_ENV
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: ${{ env.ZIP }}
+          retention-days: 1
+
+  # ── Linux/macOS scripts tarball ────────────────────────────────────────────
+  build-unix:
+    name: Package Linux/macOS scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: ver
+        run: |
+          tag="${{ github.ref_name }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create tarball
+        run: |
+          tar -czf "ftdi-tools-${{ steps.ver.outputs.tag }}-linux-macos.tar.gz" \
+            -C macos-linux ftdi-unbind ftdi-bind
+          echo "TAR=ftdi-tools-${{ steps.ver.outputs.tag }}-linux-macos.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Upload Unix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-macos
+          path: ${{ env.TAR }}
+          retention-days: 1
+
+  # ── Publish release ────────────────────────────────────────────────────────
+  release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-unix]
+    runs-on: ubuntu-latest
+
+    env:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten dist directory
+        run: |
+          find dist -type f | while read f; do
+            mv "$f" dist/
+          done
+          find dist -mindepth 1 -maxdepth 1 -type d -delete
+
+      - name: Compute SHA256SUMS
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS
+
+      - name: Sign SHA256SUMS with GPG (gated)
+        if: ${{ env.GPG_PRIVATE_KEY != '' }}
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import
+          gpg --batch --yes --detach-sign --armor --output dist/SHA256SUMS.sig dist/SHA256SUMS
+
+      - name: Extract changelog for this version
+        id: notes
+        run: |
+          tag="${{ github.ref_name }}"
+          ver="${tag#v}"
+          # Extract the block for this version from CHANGELOG.md (if it exists).
+          notes=$(awk "/^## \[${ver}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md 2>/dev/null || true)
+          if [ -z "$notes" ]; then
+            notes="See [CHANGELOG.md](CHANGELOG.md) for details."
+          fi
+          # Write to a file to avoid shell quoting issues with gh.
+          echo "$notes" > release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "ftdi-unbind ${{ github.ref_name }}" \
+            --notes-file release-notes.md \
+            dist/*
