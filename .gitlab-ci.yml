@@ -23,19 +23,9 @@ bind-unbind-cycle:
   script:
     - sudo macos-linux/ftdi-unbind "$FTDI_VID_PID"
     - sleep 1
-    - |
-      if ls /dev/ttyUSB* 2>/dev/null | grep -q .; then
-        echo "FAIL: ttyUSB* still present after unbind"
-        exit 1
-      fi
-    - echo "PASS: no ttyUSB* after unbind"
+    - test -z "$(ls /dev/ttyUSB* 2>/dev/null)" && echo "PASS: no ttyUSB* after unbind" || { echo "FAIL: ttyUSB* still present after unbind"; exit 1; }
     - sudo macos-linux/ftdi-bind "$FTDI_VID_PID"
     - sleep 1
-    - |
-      if ! ls /dev/ttyUSB* 2>/dev/null | grep -q .; then
-        echo "FAIL: no ttyUSB* after rebind"
-        exit 1
-      fi
-    - echo "PASS: ttyUSB* present after rebind"
+    - ls /dev/ttyUSB* 2>/dev/null && echo "PASS: ttyUSB* present after rebind" || { echo "FAIL: no ttyUSB* after rebind"; exit 1; }
   after_script:
     - sudo macos-linux/ftdi-bind "$FTDI_VID_PID" 2>/dev/null || true
