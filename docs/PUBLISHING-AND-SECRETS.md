@@ -39,10 +39,19 @@ trust is **bound to our repo + ref**, so a fork cannot reuse it.
   all of this in one go.
 - **GitLab (`gitlab.compelcon.se`):** same model **iff** Microsoft Entra can
   reach `https://gitlab.compelcon.se/.well-known/openid-configuration` over the
-  public internet with valid TLS. Add a *second* federated credential to the
-  *same* App Registration. If the instance is **not** publicly reachable, OIDC
-  cannot validate the token — fall back to a client secret stored as a
-  Masked + Protected CI/CD variable. This is the only place a real secret exists.
+  public internet with valid TLS.
+  [`scripts/setup-gitlab-oidc.ps1`](../scripts/setup-gitlab-oidc.ps1) adds a
+  *second* federated credential to the *same* App Registration. If the instance
+  is **not** publicly reachable, OIDC cannot validate the token — run that script
+  with `-CreateClientSecret` and store the resulting `AZURE_CLIENT_SECRET` as a
+  **Masked + Protected** CI/CD variable. That is the only place a real secret exists.
+
+> **Why flexible federated credentials.** A release is triggered by a version
+> *tag* (`refs/tags/v*` on GitHub, `ref_type:tag:ref:v*` on GitLab) — a
+> wildcard. A *standard* Entra federated credential only matches an exact
+> subject, so both setup scripts create a **flexible** credential
+> (`claimsMatchingExpression`), which supports the wildcard. Nothing else about
+> the trust changes.
 
 ## Fork safety (public repo)
 

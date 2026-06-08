@@ -22,7 +22,7 @@ param(
     [Parameter(Mandatory)]
     [string]$GitHubRepo,                                  # "owner/repo"
 
-    [string]$AppName            = "ftdi-unbind-github-signing",
+    [string]$AppName            = "ftdi-unbind-ci-signing",   # shared with the GitLab setup
     # The OIDC subject suffix after "repo:<owner>/<repo>:". Default = any v* tag.
     # Other options: "ref:refs/heads/main", "environment:release".
     [string]$SubjectRef         = "ref:refs/tags/v*",
@@ -109,25 +109,28 @@ try {
     }
 
     # ── Federated credential (the OIDC trust) ────────────────────────────────
-    Step "Federated credential (trusts $GitHubRepo : $SubjectRef)"
-    $subject = "repo:${GitHubRepo}:${SubjectRef}"
-    $existingFc = (& az ad app federated-credential list --id $appId --query "[?subject=='$subject'].name" -o tsv 2>$null)
+    # A version tag (refs/tags/v*) is a WILDCARD, which a *standard* federated
+    # credential (exact subject) cannot match — so we create a FLEXIBLE federated
+    # credential whose claims-matching expression supports the wildcard.
+    Step "Federated credential (trusts repo:${GitHubRepo}:${SubjectRef})"
+    $matchExpr = "claims['sub'] matches 'repo:${GitHubRepo}:${SubjectRef}'"
+    $fcName = "github-" + (("$GitHubRepo-$SubjectRef") -replace '[^a-zA-Z0-9]+','-')
+    if ($fcName.Length -gt 120) { $fcName = $fcName.Substring(0,120) }
+    $existingFc = (& az ad app federated-credential list --id $appId --query "[?name=='$fcName'].name" -o tsv 2>$null)
     if ($existingFc) {
-        Ok "federated credential already present for this subject"
+        Ok "federated credential '$fcName' already present"
     } else {
-        $fcName = "github-" + ($GitHubRepo -replace '[^a-zA-Z0-9]+','-') + "-" + ($SubjectRef -replace '[^a-zA-Z0-9]+','-')
-        if ($fcName.Length -gt 120) { $fcName = $fcName.Substring(0,120) }
         $params = [ordered]@{
             name      = $fcName
             issuer    = "https://token.actions.githubusercontent.com"
-            subject   = $subject
             audiences = @("api://AzureADTokenExchange")
-        } | ConvertTo-Json -Compress
+            claimsMatchingExpression = [ordered]@{ value = $matchExpr; languageVersion = 1 }
+        } | ConvertTo-Json -Compress -Depth 5
         $tmp = New-TemporaryFile
         Set-Content -Path $tmp -Value $params -Encoding ascii
         Az ad app federated-credential create --id $appId --parameters "@$tmp" | Out-Null
         Remove-Item $tmp -ErrorAction SilentlyContinue
-        Ok "federated credential created: $fcName"
+        Ok "flexible federated credential created: $fcName"
     }
 
     # ── Hand off the three identifiers ───────────────────────────────────────
