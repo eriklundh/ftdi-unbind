@@ -14,6 +14,11 @@
 #   ftdi-tools-<version>-all.zip            (everything above, one bundle)
 #   SHA256SUMS                               (covers every asset)
 #   SHA256SUMS.sig                          (GPG — when GPG_PRIVATE_KEY is set)
+#
+# This workflow ALWAYS builds and signs on a tag — it is the canonical signed
+# build. The mirrored GitLab project either signs natively (if it has a Windows
+# runner) or pulls the assets this workflow produced; either way GitHub does its
+# own thing here unconditionally. See docs/PUBLISHING-AND-SECRETS.md.
 
 name: Release
 

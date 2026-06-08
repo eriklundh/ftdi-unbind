@@ -53,6 +53,37 @@ trust is **bound to our repo + ref**, so a fork cannot reuse it.
 > (`claimsMatchingExpression`), which supports the wildcard. Nothing else about
 > the trust changes.
 
+## Cross-host release flow (GitHub always signs; GitLab native or pull)
+
+GitLab is canonical and push-mirrors to GitHub. **GitHub Actions always builds
+and signs** on a `v*` tag — that is the authoritative signed build, needing no
+knowledge of GitLab. The GitLab tag pipeline then does exactly one of two
+mutually-exclusive jobs:
+
+1. **`build-sign-native`** — when a Windows runner is available (CI/CD variable
+   `GITLAB_HAS_WINDOWS_RUNNER == "true"`): build + sign locally on the `windows`
+   runner via Azure OIDC and publish the GitLab Release from that local build.
+2. **`publish-from-github`** (default) — wait for GitHub's signed release,
+   download its assets, upload them to the GitLab Package Registry, and create
+   the GitLab Release from GitHub's signed artifacts.
+
+Because the rules are mutually exclusive, there is never a double release, and
+**GitHub never needs a GitLab token** — GitLab pulls, GitHub doesn't push.
+
+**GitLab-side config** (Project → Settings → CI/CD → Variables):
+
+| Name | Kind | Value |
+|---|---|---|
+| `GITHUB_REPO` | variable | `owner/repo` of the GitHub mirror (e.g. `compelcon/ftdi-unbind`) |
+| `GITHUB_TOKEN` | masked variable | **only** if the GitHub repo/releases are private (read access to pull assets) |
+| `GITLAB_HAS_WINDOWS_RUNNER` | variable | set `"true"` once you register a `windows` runner; leave unset to always pull from GitHub |
+| `AZURE_*` (+ optional `AZURE_CLIENT_SECRET`) | variables | only for the native path — see above |
+
+The mirror direction (GitLab → GitHub) is a one-way **push mirror** configured
+in GitLab (Settings → Repository → Mirroring repositories), with a GitHub PAT
+stored there by GitLab — that token lives only in GitLab's mirror config, not in
+any pipeline.
+
 ## Fork safety (public repo)
 
 Every signing step is gated on `AZURE_CLIENT_ID != ''`. GitHub does not expose

@@ -4,27 +4,40 @@
 #
 #   * Branch / MR pipelines  -> hardware-in-the-loop tests on the rpi5 runner
 #                               (diagnose + bind/unbind cycle against a real FTDI).
-#   * Tag pipelines (v*)      -> build, SIGN, package, and publish a GitLab Release
-#                               of the three signed Windows exes + the Linux/macOS
-#                               scripts + the diagnosis scripts + an all-in-one
-#                               bundle, each covered by SHA256SUMS. Mirrors the
-#                               GitHub release in .github/workflows/release.yml.
+#   * Tag pipelines (v*)      -> publish a GitLab Release of the three signed
+#                               Windows exes + the Linux/macOS scripts + the
+#                               diagnosis scripts + an all-in-one bundle, each
+#                               covered by SHA256SUMS.
 #
-# Signing reuses scripts/release-local.ps1 (the same build->test->sign->package
-# path as the local "big red button"). Azure auth is OIDC (no stored secret)
-# when AZURE_CLIENT_ID + a federated token are present; a masked
-# AZURE_CLIENT_SECRET is the fallback for instances Entra cannot reach.
+# SIGNING MODEL. GitHub Actions ALWAYS builds and signs on a tag (the canonical
+# signed build — .github/workflows/release.yml). This GitLab pipeline does ONE
+# of two things on a tag, decided by whether a Windows runner is available:
 #
-# RUNNER REQUIREMENTS for the tag pipeline (see windows/docs/SIGNING-AZURE-ARTIFACT.md):
-#   * a runner tagged `windows` with: VS 2022 C++ build tools, CMake 3.20+,
-#     the Azure CLI, and Microsoft.Azure.TrustedSigningClientTools installed.
-#   * CI/CD variables: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_SUBSCRIPTION_ID
-#     (identifiers); plus AZURE_CLIENT_SECRET (Masked + Protected) only if you
-#     use the client-secret fallback instead of OIDC. Run
-#     scripts/setup-gitlab-oidc.ps1 to create the OIDC federation.
+#   * `build-sign-native`  (CI/CD var GITLAB_HAS_WINDOWS_RUNNER == "true"):
+#        build + SIGN the exes locally on the `windows` runner and publish the
+#        GitLab Release from this local build.
+#   * `publish-from-github` (otherwise — the default):
+#        wait for GitHub's signed release, download its assets, and publish them
+#        to this Release tab.
+#
+# The two rules are mutually exclusive, so exactly one runs — never a double
+# release. Native signing reuses scripts/release-local.ps1 (the same path as the
+# local "big red button").
+#
+# CI/CD VARIABLES:
+#   * GITHUB_REPO                 owner/repo of the GitHub mirror (for the pull path)
+#   * GITHUB_TOKEN  (optional)    only if the GitHub repo/releases are private
+#   * GITLAB_HAS_WINDOWS_RUNNER   set "true" once you register a `windows` runner
+#   For native signing also: AZURE_TENANT_ID, AZURE_CLIENT_ID,
+#   AZURE_SUBSCRIPTION_ID (+ AZURE_CLIENT_SECRET, Masked+Protected, only for the
+#   client-secret fallback). Run scripts/setup-gitlab-oidc.ps1 to set up OIDC.
+#   A `windows` runner needs VS 2022 C++ tools, CMake 3.20+, Azure CLI, and
+#   Microsoft.Azure.TrustedSigningClientTools (see windows/docs/SIGNING-AZURE-ARTIFACT.md).
 
 variables:
   FTDI_VID_PID: "0403:6015"
+  # GitHub mirror to pull signed assets from when GitLab has no Windows runner.
+  GITHUB_REPO: "compelcon/ftdi-unbind"          # adjust to your GitHub path
   # GitLab Generic Package Registry location for the release assets.
   PKG_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/ftdi-tools/${CI_COMMIT_TAG}"
   # libwdi version pinned in scripts/build-libwdi.ps1 (cache key).
@@ -64,13 +77,13 @@ bind-unbind-cycle:
   after_script:
     - sudo macos-linux/ftdi-bind "$FTDI_VID_PID" 2>/dev/null || true
 
-# ── Build + sign + package + publish — tag pipelines, Windows runner ─────────
-build-sign-release:
+# ── Tag path A: native build + sign on a GitLab Windows runner ───────────────
+build-sign-native:
   stage: release
   tags: [windows]
   rules:
-    - if: '$CI_COMMIT_TAG'
-  needs: []                       # DAG: start immediately, independent of the hw jobs
+    - if: '$CI_COMMIT_TAG && $GITLAB_HAS_WINDOWS_RUNNER == "true"'
+  needs: []
   id_tokens:
     AZURE_FEDERATED_TOKEN:        # OIDC token GitLab mints for this job
       aud: api://AzureADTokenExchange
@@ -143,8 +156,59 @@ build-sign-release:
         "diagnosis.ps1","diagnosis.cmd","diagnosis.sh","SHA256SUMS")
       $links = $names | ForEach-Object { @{ name = $_; url = "$env:PKG_URL/$_" } }
       $body = @{ name = "ftdi-unbind $tag"; tag_name = $tag
-        description = "Automated signed release. Verify downloads against SHA256SUMS."
+        description = "Signed natively on GitLab. Verify downloads against SHA256SUMS."
         assets = @{ links = $links } } | ConvertTo-Json -Depth 6
       Invoke-RestMethod -Method Post -Uri "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/releases" `
         -Headers @{ 'JOB-TOKEN' = $env:CI_JOB_TOKEN; 'Content-Type' = 'application/json' } -Body $body | Out-Null
-      Write-Host "Release $tag created."
+      Write-Host "Release $tag created (native)."
+
+# ── Tag path B: no Windows runner — wait for GitHub, publish what it signed ───
+publish-from-github:
+  stage: release
+  tags: [rpi5]                    # any Linux runner; the Pi is fine (no signing here)
+  rules:
+    - if: '$CI_COMMIT_TAG && $GITLAB_HAS_WINDOWS_RUNNER != "true"'
+  needs: []
+  variables:
+    GITHUB_WAIT_SECONDS: "1800"   # how long to wait for GitHub's signed release
+  script:
+    - |
+      set -euo pipefail
+      tag="$CI_COMMIT_TAG"
+      ghapi="https://api.github.com/repos/${GITHUB_REPO}/releases/tags/${tag}"
+      auth=()
+      if [ -n "${GITHUB_TOKEN:-}" ]; then auth=(-H "Authorization: Bearer ${GITHUB_TOKEN}"); fi
+      # 1) wait for GitHub to finish building + signing this tag's release
+      deadline=$(( $(date +%s) + GITHUB_WAIT_SECONDS ))
+      until json=$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" "$ghapi" 2>/dev/null); do
+        if [ "$(date +%s)" -ge "$deadline" ]; then
+          echo "Timed out waiting for the GitHub release $tag"; exit 1
+        fi
+        echo "waiting for GitHub release $tag ..."; sleep 30
+      done
+      # 2) download every asset GitHub signed
+      mkdir -p dist
+      urls=$(printf '%s' "$json" | grep -o '"browser_download_url": *"[^"]*"' | sed 's/.*"\(https[^"]*\)"/\1/')
+      [ -n "$urls" ] || { echo "no assets on GitHub release $tag"; exit 1; }
+      for u in $urls; do
+        echo "downloading $(basename "$u")"
+        curl -fsSL "${auth[@]}" -o "dist/$(basename "$u")" "$u"
+      done
+    - |
+      set -euo pipefail
+      # 3) upload to the GitLab Generic Package Registry
+      for f in dist/*; do
+        echo "uploading $(basename "$f")"
+        curl --fail -sS --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+          --upload-file "$f" "${PKG_URL}/$(basename "$f")"
+      done
+    - |
+      set -euo pipefail
+      # 4) create the GitLab Release linking the uploaded assets
+      relApi="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
+      links=$(for f in dist/*; do n=$(basename "$f"); printf '{"name":"%s","url":"%s/%s"},' "$n" "$PKG_URL" "$n"; done | sed 's/,$//')
+      curl --fail -sS --request POST \
+        --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --header "Content-Type: application/json" \
+        --data "{\"name\":\"ftdi-unbind ${CI_COMMIT_TAG}\",\"tag_name\":\"${CI_COMMIT_TAG}\",\"description\":\"Signed by GitHub, mirrored here. Verify downloads against SHA256SUMS.\",\"assets\":{\"links\":[${links}]}}" \
+        "$relApi"
+      echo "Release ${CI_COMMIT_TAG} created (from GitHub build)."
