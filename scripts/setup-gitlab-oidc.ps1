@@ -48,7 +48,9 @@ function Ok($m){ Write-Host "    OK  $m" -ForegroundColor Green }
 function Note($m){ Write-Host "    --  $m" -ForegroundColor DarkGray }
 function Warn($m){ Write-Host "    !!  $m" -ForegroundColor Yellow }
 function Die($m,$fix){ Write-Host ""; Write-Host "███ SETUP ABORTED ███" -ForegroundColor Red; Write-Host "  $m" -ForegroundColor Red; if($fix){ Write-Host "  Fix: $fix" -ForegroundColor Yellow }; exit 1 }
-function Az(){ $out = & az @args; if ($LASTEXITCODE -ne 0){ Die "az $($args -join ' ') failed." }; return $out }
+# NB: must NOT be named "Az" — PowerShell is case-insensitive, so a function
+# named "Az" shadows the external "az" and `& az` recurses (call-depth overflow).
+function Invoke-Az(){ $out = & az @args; if ($LASTEXITCODE -ne 0){ Die "az $($args -join ' ') failed." }; return $out }
 
 try {
     Write-Host ""
@@ -58,7 +60,7 @@ try {
     $GitLabUrl = $GitLabUrl.TrimEnd('/')
 
     Step "Azure context"
-    $acct = (Az account show) | ConvertFrom-Json
+    $acct = (Invoke-Az account show) | ConvertFrom-Json
     if (-not $SubscriptionId) { $SubscriptionId = $acct.id }
     if (-not $TenantId)       { $TenantId       = $acct.tenantId }
     Ok "signed in as $($acct.user.name)"
@@ -71,12 +73,12 @@ try {
 
     # ── App Registration (shared, no secret unless -CreateClientSecret) ──────
     Step "App Registration '$AppName'"
-    $appId = (Az ad app list --display-name $AppName --query "[0].appId" -o tsv)
+    $appId = (Invoke-Az ad app list --display-name $AppName --query "[0].appId" -o tsv)
     if ($appId) { Ok "reusing existing app  (appId $appId)" }
-    else { $appId = (Az ad app create --display-name $AppName --query appId -o tsv); Ok "created app  (appId $appId)" }
+    else { $appId = (Invoke-Az ad app create --display-name $AppName --query appId -o tsv); Ok "created app  (appId $appId)" }
 
     $spOid = (& az ad sp show --id $appId --query id -o tsv 2>$null)
-    if (-not $spOid) { $spOid = (Az ad sp create --id $appId --query id -o tsv); Ok "created service principal  (objectId $spOid)" }
+    if (-not $spOid) { $spOid = (Invoke-Az ad sp create --id $appId --query id -o tsv); Ok "created service principal  (objectId $spOid)" }
     else { Ok "service principal exists  (objectId $spOid)" }
 
     # ── Signer role ──────────────────────────────────────────────────────────
@@ -88,18 +90,23 @@ try {
     Note "role: $roleName"
     $existingAssign = (& az role assignment list --assignee $appId --scope $scope --role $roleId --query "[0].id" -o tsv 2>$null)
     if ($existingAssign) { Ok "role already assigned" }
-    else { Az role assignment create --role $roleId --assignee-object-id $spOid --assignee-principal-type ServicePrincipal --scope $scope | Out-Null; Ok "role assigned at scope" }
+    else { Invoke-Az role assignment create --role $roleId --assignee-object-id $spOid --assignee-principal-type ServicePrincipal --scope $scope | Out-Null; Ok "role assigned at scope" }
 
     # ── Federated credential for GitLab (the OIDC trust) ─────────────────────
     # GitLab's `sub` claim for a tag pipeline is
     #   project_path:<group>/<project>:ref_type:tag:ref:<tag>
     # <tag> varies, so we use a FLEXIBLE federated credential (wildcard match).
+    # NB: flexible credentials (claimsMatchingExpression) are NOT supported by
+    # `az ad app federated-credential create` — it demands a static `subject`.
+    # They exist only on the Graph **beta** endpoint, so POST via `az rest`.
     Step "Federated credential (issuer $GitLabUrl)"
     $sub = "project_path:${GitLabProject}:ref_type:tag:ref:${TagPattern}"
     $matchExpr = "claims['sub'] matches '$sub'"
     $fcName = "gitlab-" + (("$GitLabProject-$TagPattern") -replace '[^a-zA-Z0-9]+','-')
     if ($fcName.Length -gt 120) { $fcName = $fcName.Substring(0,120) }
-    $existingFc = (& az ad app federated-credential list --id $appId --query "[?name=='$fcName'].name" -o tsv 2>$null)
+    $objId = (Invoke-Az ad app show --id $appId --query id -o tsv)
+    $graph = "https://graph.microsoft.com/beta/applications/$objId/federatedIdentityCredentials"
+    $existingFc = (& az rest --method GET --url $graph --query "value[?name=='$fcName'].name" -o tsv 2>$null)
     if ($existingFc) {
         Ok "federated credential '$fcName' already present"
     } else {
@@ -111,7 +118,7 @@ try {
         } | ConvertTo-Json -Compress -Depth 5
         $tmp = New-TemporaryFile
         Set-Content -Path $tmp -Value $params -Encoding ascii
-        Az ad app federated-credential create --id $appId --parameters "@$tmp" | Out-Null
+        Invoke-Az rest --method POST --url $graph --headers "Content-Type=application/json" --body "@$tmp" | Out-Null
         Remove-Item $tmp -ErrorAction SilentlyContinue
         Ok "flexible federated credential created: $fcName"
     }
@@ -123,7 +130,7 @@ try {
     $clientSecret = $null
     if ($CreateClientSecret) {
         Step "Client secret (fallback)"
-        $clientSecret = (Az ad app credential reset --id $appId --display-name "gitlab-ci" --years 1 --query password -o tsv)
+        $clientSecret = (Invoke-Az ad app credential reset --id $appId --display-name "gitlab-ci" --years 1 --query password -o tsv)
         Ok "client secret created (shown once below — store it now)"
     }
 
