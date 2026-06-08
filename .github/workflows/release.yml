@@ -8,9 +8,11 @@
 # so forks build cleanly unsigned without any credential access.
 #
 # Artifacts attached to the release:
-#   ftdi-tools-<version>-windows-x64.zip   (all three exes, signed when possible)
+#   ftdi-tools-<version>-windows-x64.zip    (the three signed exes)
 #   ftdi-tools-<version>-linux-macos.tar.gz (bash scripts for Linux and macOS)
-#   SHA256SUMS
+#   diagnosis.ps1 / diagnosis.cmd / diagnosis.sh   (standalone diagnostic scripts)
+#   ftdi-tools-<version>-all.zip            (everything above, one bundle)
+#   SHA256SUMS                               (covers every asset)
 #   SHA256SUMS.sig                          (GPG — when GPG_PRIVATE_KEY is set)
 
 name: Release
@@ -177,8 +179,26 @@ jobs:
           done
           find dist -mindepth 1 -maxdepth 1 -type d -delete
 
+      - name: Assemble diagnosis scripts + combined "everything" bundle
+        run: |
+          tag="${{ github.ref_name }}"
+          stage="ftdi-tools-${tag}"
+          mkdir -p "$stage/windows" "$stage/linux-macos"
+          # signed Windows exes (extracted from the per-platform zip)
+          unzip -j "dist/ftdi-tools-${tag}-windows-x64.zip"     -d "$stage/windows"
+          # Linux/macOS scripts
+          tar  -xzf "dist/ftdi-tools-${tag}-linux-macos.tar.gz" -C "$stage/linux-macos"
+          # cross-platform diagnostic scripts + the top-level readme
+          cp diagnosis.ps1 diagnosis.cmd diagnosis.sh README.md "$stage/"
+          # one bundle with everything
+          zip -r "dist/ftdi-tools-${tag}-all.zip" "$stage"
+          # also expose the diagnosis scripts as standalone, individually downloadable assets
+          cp diagnosis.ps1 diagnosis.cmd diagnosis.sh dist/
+
       - name: Compute SHA256SUMS
         working-directory: dist
+        # Hashes every asset now in dist/: per-platform archives, the all-in-one
+        # bundle, and the three standalone diagnosis scripts.
         run: sha256sum * > SHA256SUMS
 
       - name: Sign SHA256SUMS with GPG (gated)
