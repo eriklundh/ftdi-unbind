@@ -84,6 +84,24 @@ in GitLab (Settings → Repository → Mirroring repositories), with a GitHub PA
 stored there by GitLab — that token lives only in GitLab's mirror config, not in
 any pipeline.
 
+**The mirror token — one fine-grained GitHub PAT, no expiry.** Create a single
+*fine-grained* PAT under the `eriklundh` account (GitHub → Settings → Developer
+settings → Fine-grained tokens) and reuse it for both mirrors:
+
+| Field | Value |
+|---|---|
+| Resource owner | `eriklundh` |
+| Repository access | **Only select repositories** → `ftdi-unbind`, `unified-serial-term` |
+| Expiration | **No expiration** (allowed because `eriklundh` is a personal account, not an org) |
+| Permission · **Contents** | **Read and write** — lets the mirror push refs (and pull release assets if a release is ever private) |
+| Permission · **Workflows** | **Read and write** — *required*: the mirror push carries `.github/workflows/*`, and GitHub **rejects** a push that touches workflow files unless the token holds this permission |
+| Permission · Metadata | Read-only (auto-selected, mandatory) |
+
+Nothing else is needed. This token is pasted **only** into each project's GitLab
+mirror config (as the password, username `eriklundh`); it is *not* a CI/CD
+variable. The CI-side `GITHUB_TOKEN` variable is a *separate* concern and is only
+needed if the GitHub releases are private — they are public here, so leave it unset.
+
 ## Fork safety (public repo)
 
 Every signing step is gated on `AZURE_CLIENT_ID != ''`. GitHub does not expose
