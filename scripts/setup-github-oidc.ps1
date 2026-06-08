@@ -12,8 +12,8 @@
 #
 # Usage:
 #   az login                                              # as an Owner / privileged admin
-#   pwsh -File scripts\setup-github-oidc.ps1 -GitHubRepo compelcon/ftdi-unbind
-#   pwsh -File scripts\setup-github-oidc.ps1 -GitHubRepo compelcon/ftdi-unbind -SetGitHubSecrets
+#   pwsh -File scripts\setup-github-oidc.ps1 -GitHubRepo eriklundh/ftdi-unbind
+#   pwsh -File scripts\setup-github-oidc.ps1 -GitHubRepo eriklundh/ftdi-unbind -SetGitHubSecrets
 #
 # After it runs, push a v* tag — the release workflow signs automatically.
 

@@ -17,7 +17,7 @@ InstallModes:
   - silent
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/compelcon/ftdi-unbind/releases/download/v0.1.0/ftdi-tools-v0.1.0-windows-x64.zip
+    InstallerUrl: https://github.com/eriklundh/ftdi-unbind/releases/download/v0.1.0/ftdi-tools-v0.1.0-windows-x64.zip
     InstallerSha256: PLACEHOLDER_SHA256_UPDATED_BY_RELEASE_WORKFLOW
     NestedInstallerType: portable
     NestedInstallerFiles:

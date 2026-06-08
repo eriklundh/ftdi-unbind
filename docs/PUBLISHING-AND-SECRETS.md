@@ -74,7 +74,7 @@ Because the rules are mutually exclusive, there is never a double release, and
 
 | Name | Kind | Value |
 |---|---|---|
-| `GITHUB_REPO` | variable | `owner/repo` of the GitHub mirror (e.g. `compelcon/ftdi-unbind`) |
+| `GITHUB_REPO` | variable | `owner/repo` of the GitHub mirror (e.g. `eriklundh/ftdi-unbind`) |
 | `GITHUB_TOKEN` | masked variable | **only** if the GitHub repo/releases are private (read access to pull assets) |
 | `GITLAB_HAS_WINDOWS_RUNNER` | variable | set `"true"` once you register a `windows` runner; leave unset to always pull from GitHub |
 | `AZURE_*` (+ optional `AZURE_CLIENT_SECRET`) | variables | only for the native path — see above |
@@ -83,6 +83,24 @@ The mirror direction (GitLab → GitHub) is a one-way **push mirror** configured
 in GitLab (Settings → Repository → Mirroring repositories), with a GitHub PAT
 stored there by GitLab — that token lives only in GitLab's mirror config, not in
 any pipeline.
+
+**The mirror token — one fine-grained GitHub PAT, no expiry.** Create a single
+*fine-grained* PAT under the `eriklundh` account (GitHub → Settings → Developer
+settings → Fine-grained tokens) and reuse it for both mirrors:
+
+| Field | Value |
+|---|---|
+| Resource owner | `eriklundh` |
+| Repository access | **Only select repositories** → `ftdi-unbind`, `unified-serial-term` |
+| Expiration | **No expiration** (allowed because `eriklundh` is a personal account, not an org) |
+| Permission · **Contents** | **Read and write** — lets the mirror push refs (and pull release assets if a release is ever private) |
+| Permission · **Workflows** | **Read and write** — *required*: the mirror push carries `.github/workflows/*`, and GitHub **rejects** a push that touches workflow files unless the token holds this permission |
+| Permission · Metadata | Read-only (auto-selected, mandatory) |
+
+Nothing else is needed. This token is pasted **only** into each project's GitLab
+mirror config (as the password, username `eriklundh`); it is *not* a CI/CD
+variable. The CI-side `GITHUB_TOKEN` variable is a *separate* concern and is only
+needed if the GitHub releases are private — they are public here, so leave it unset.
 
 ## Fork safety (public repo)
 

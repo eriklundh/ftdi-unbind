@@ -15,7 +15,7 @@ set -euo pipefail
 
 TAG="${1:?Usage: $0 <tag> (e.g. v0.2.0)}"
 VER="${TAG#v}"
-REPO="compelcon/ftdi-unbind"
+REPO="eriklundh/ftdi-unbind"
 BASE_URL="https://github.com/$REPO/releases/download/$TAG"
 WIN_ZIP="ftdi-tools-${TAG}-windows-x64.zip"
 UNIX_TAR="ftdi-tools-${TAG}-linux-macos.tar.gz"
