@@ -175,6 +175,12 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64 ^
 cmake --build build --config Release
 ```
 
+This builds only the three release tools.  The Phase-0 probe and the
+unit/CLI tests are excluded from the normal build (they are not shipped);
+add `-DFTDI_BUILD_TESTS=ON` (or use the `vs2022-x64-tests` preset) to
+build them — they are emitted to `build/dev/` so they never land beside
+the release exes — then `ctest --test-dir build -C Release`.
+
 (For VS2026 use its generator string, e.g. `-G "Visual Studio 18 2026"`;
 confirm the exact name with `cmake --help`. In VSCode, the CMake Tools
 extension picks the kit and you set the same two cache vars in
