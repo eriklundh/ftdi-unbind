@@ -63,8 +63,10 @@ pnputil driver store listing (default: count summary only).
 
 **Windows C tools** (`windows/` subdirectory) — phases 0–8 complete
 (build, enumerate, install WinUSB, restore VCP, dual-exe CLI, release
-packaging). Phases 9–11 (code signing) are in progress. Pre-built binaries
-are not yet attached to the release page pending signing.
+packaging). Code signing (phases 9–11) is wired: local "big red button"
+(`scripts/release-local.ps1` / `RELEASE.cmd`) and CI signing via Azure
+Artifact Signing OIDC. No signed release has been *published* yet — see the
+publishing handoff below.
 
 ### What is next / in progress
 
@@ -78,6 +80,65 @@ are not yet attached to the release page pending signing.
   Signing; CI workflow is in `windows/`.
 - **Release page** — attach signed Windows binaries + `diagnosis.sh` to the
   GitLab releases page once signing is done.
+
+### Publishing, mirror & signing — handoff state (2026-06-08)
+
+This captures cross-host infra set up outside the code, so any Claude can
+resume. **No secrets are written here by design** — read identifiers with
+`az` / `gh`; see `docs/PUBLISHING-AND-SECRETS.md`.
+
+**Topology.** GitLab `gitlab.compelcon.se/unified-serial-terminal/*` is
+canonical and **push-mirrors** to public GitHub `eriklundh/*`. GitHub Actions
+always builds + signs on a `v*` tag (the authoritative signed build); the
+GitLab tag pipeline either signs natively (if it has a `windows` runner) or
+pulls GitHub's signed assets (`publish-from-github`).
+
+**Done:**
+- GitHub repos `eriklundh/ftdi-unbind` and `eriklundh/unified-serial-term`
+  created **public**. GitLab project IDs: ftdi-unbind **447**,
+  unified-serial-term **446**.
+- **Push mirrors** configured on both (GitLab → GitHub), enabled,
+  mirror-all-branches-and-tags. Auth = one fine-grained GitHub PAT (owner
+  eriklundh, those two repos, **no expiry**, Contents:RW + Workflows:RW)
+  stored **only** in each project's GitLab mirror config — never a CI var,
+  never in git. First sync verified clean.
+- GitLab CI var `GITHUB_REPO=eriklundh/ftdi-unbind` set on project 447.
+- **OIDC signing live** for `eriklundh/ftdi-unbind`: Entra app
+  `ftdi-unbind-ci-signing` (no client secret), *Artifact Signing Certificate
+  Profile Signer* role at **account scope** (`Trusted-Signing-TJE1`), one
+  flexible federated credential trusting `repo:eriklundh/ftdi-unbind:ref:refs/tags/v*`.
+  The three `AZURE_*` GitHub Actions secrets are set. Recreate/verify any time
+  with `scripts/setup-github-oidc.ps1 -GitHubRepo eriklundh/ftdi-unbind -ScopeToAccount`
+  (idempotent; needs `az login` as an Owner).
+- Fixed two bugs that stopped both `setup-*-oidc.ps1` scripts from running:
+  the `az` helper was named `Az` (PowerShell is case-insensitive → infinite
+  recursion; now `Invoke-Az`), and flexible federated credentials must be
+  created via Graph **beta** with `az rest` (the `az ad app
+  federated-credential create` command rejects them). **This fix is committed
+  locally on `main` but may be UNPUSHED** — check `git log origin/main..main`.
+
+**Next steps (in order):**
+1. Push the local `main` commits if any are unpushed (`git push origin main`);
+   the mirror carries them to GitHub.
+2. **Publish the first signed release.** The mirrored `v0.1.0` tag will NOT
+   trigger `release.yml` because that workflow post-dates the tagged commit.
+   Cut a fresh tag whose commit contains `.github/workflows/release.yml`
+   (e.g. `git tag v0.1.1 && git push origin v0.1.1`). On GitLab that push
+   mirrors to GitHub, where `release.yml` builds libwdi → builds → ctest →
+   signs via `azure/artifact-signing-action@v0` (endpoint
+   `https://neu.codesigning.azure.net/`, account `Trusted-Signing-TJE1`,
+   profile `Compelcon-AB-MS-Code-signed`) → assembles all assets + SHA256SUMS
+   → `gh release create`. Then the GitLab `publish-from-github` job pulls
+   those signed assets and creates the GitLab release.
+3. Verify: GitHub Release has the three exes signed (Authenticode Valid) plus
+   the Linux/macOS tarball, three diagnosis scripts, the all-in-one zip, and
+   SHA256SUMS.
+
+**Open content decisions (non-blocking):**
+- Diagnosis scripts point downloads at `gitlab.compelcon.se/.../-/releases`;
+  decide whether to also/instead point public users at the GitHub releases.
+- winget package ID `Compelcon.FtdiUnbind` — keep (company/signer branding)
+  or rebrand under eriklundh.
 
 ### Key design decisions (carry into new sessions)
 
