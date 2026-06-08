@@ -37,7 +37,7 @@
 variables:
   FTDI_VID_PID: "0403:6015"
   # GitHub mirror to pull signed assets from when GitLab has no Windows runner.
-  GITHUB_REPO: "compelcon/ftdi-unbind"          # adjust to your GitHub path
+  GITHUB_REPO: "eriklundh/ftdi-unbind"          # the GitHub mirror
   # GitLab Generic Package Registry location for the release assets.
   PKG_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/ftdi-tools/${CI_COMMIT_TAG}"
   # libwdi version pinned in scripts/build-libwdi.ps1 (cache key).

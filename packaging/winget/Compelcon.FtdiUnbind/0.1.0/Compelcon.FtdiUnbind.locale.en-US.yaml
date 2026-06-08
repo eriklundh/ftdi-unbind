@@ -4,12 +4,12 @@ PackageIdentifier: Compelcon.FtdiUnbind
 PackageVersion: 0.1.0
 PackageLocale: en-US
 Publisher: Compelcon
-PublisherUrl: https://github.com/compelcon
-PublisherSupportUrl: https://github.com/compelcon/ftdi-unbind/issues
+PublisherUrl: https://github.com/eriklundh
+PublisherSupportUrl: https://github.com/eriklundh/ftdi-unbind/issues
 PackageName: ftdi-unbind
-PackageUrl: https://github.com/compelcon/ftdi-unbind
+PackageUrl: https://github.com/eriklundh/ftdi-unbind
 License: GPL-2.0-or-later
-LicenseUrl: https://github.com/compelcon/ftdi-unbind/blob/main/LICENSE
+LicenseUrl: https://github.com/eriklundh/ftdi-unbind/blob/main/LICENSE
 ShortDescription: Unbind/rebind the OS FTDI serial driver to give libusb exclusive access
 Description: |-
   ftdi-unbind switches an FTDI USB device from the Windows VCP (COM port)
@@ -29,6 +29,6 @@ Tags:
   - winusb
   - libusb
   - driver
-ReleaseNotesUrl: https://github.com/compelcon/ftdi-unbind/releases/tag/v0.1.0
+ReleaseNotesUrl: https://github.com/eriklundh/ftdi-unbind/releases/tag/v0.1.0
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

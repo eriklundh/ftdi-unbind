@@ -74,7 +74,7 @@ Because the rules are mutually exclusive, there is never a double release, and
 
 | Name | Kind | Value |
 |---|---|---|
-| `GITHUB_REPO` | variable | `owner/repo` of the GitHub mirror (e.g. `compelcon/ftdi-unbind`) |
+| `GITHUB_REPO` | variable | `owner/repo` of the GitHub mirror (e.g. `eriklundh/ftdi-unbind`) |
 | `GITHUB_TOKEN` | masked variable | **only** if the GitHub repo/releases are private (read access to pull assets) |
 | `GITLAB_HAS_WINDOWS_RUNNER` | variable | set `"true"` once you register a `windows` runner; leave unset to always pull from GitHub |
 | `AZURE_*` (+ optional `AZURE_CLIENT_SECRET`) | variables | only for the native path — see above |

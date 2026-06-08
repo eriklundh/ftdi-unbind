@@ -19,13 +19,13 @@ baseline and works everywhere.
 
 ## Homebrew tap
 
-The formula lives in a separate tap repo (`compelcon/homebrew-tools`).
+The formula lives in a separate tap repo (`eriklundh/homebrew-tools`).
 The `packaging/homebrew/ftdi-unbind.rb` in this repo is the **canonical source**;
 after each release you copy/push it to the tap repo.
 
 **User install:**
 ```bash
-brew tap compelcon/tools https://github.com/compelcon/homebrew-tools
+brew tap eriklundh/tools https://github.com/eriklundh/homebrew-tools
 brew install ftdi-unbind
 ```
 
@@ -69,7 +69,7 @@ directly from the release URL:
 ```powershell
 wingetcreate update Compelcon.FtdiUnbind `
   --version 0.2.0 `
-  --urls https://github.com/compelcon/ftdi-unbind/releases/download/v0.2.0/ftdi-tools-v0.2.0-windows-x64.zip `
+  --urls https://github.com/eriklundh/ftdi-unbind/releases/download/v0.2.0/ftdi-tools-v0.2.0-windows-x64.zip `
   --submit
 ```
 
