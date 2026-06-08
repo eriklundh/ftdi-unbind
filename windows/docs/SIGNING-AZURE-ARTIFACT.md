@@ -52,9 +52,9 @@ Collect these once (portal → your Artifact Signing account):
 
 | Name | Example | Notes |
 |------|---------|-------|
-| **Endpoint** (region) | `https://weu.codesigning.azure.net/` | West Europe = `weu`. Use *your* account's region. |
-| **Signing account name** | `compelcon-signing` | the Artifact Signing account |
-| **Certificate profile name** | `ftdi-tools` (or reuse existing) | a Public Trust profile |
+| **Endpoint** (region) | `https://neu.codesigning.azure.net/` | This account is **North Europe** = `neu`. Authoritative value is the account's `accountUri` (portal, or `az rest` on the account). |
+| **Signing account name** | `Trusted-Signing-TJE1` | the Artifact Signing account (RG `Trusted-Signing-TJE`) |
+| **Certificate profile name** | `Compelcon-AB-MS-Code-signed` | the Public Trust profile (Active) |
 | **Tenant ID** | `AZURE_TENANT_ID` | Entra directory ID |
 | **Subscription ID** | `AZURE_SUBSCRIPTION_ID` | the paid sub (no free/trial subs allowed) |
 
@@ -66,9 +66,9 @@ paths avoid even that).
 ```json
 // signing.metadata.json  (committed; no secrets)
 {
-  "Endpoint": "https://weu.codesigning.azure.net/",
-  "CodeSigningAccountName": "compelcon-signing",
-  "CertificateProfileName": "ftdi-tools"
+  "Endpoint": "https://neu.codesigning.azure.net/",
+  "CodeSigningAccountName": "Trusted-Signing-TJE1",
+  "CertificateProfileName": "Compelcon-AB-MS-Code-signed"
 }
 ```
 
@@ -181,9 +181,9 @@ jobs:
         if: ${{ env.AZURE_CLIENT_ID != '' }}
         uses: azure/artifact-signing-action@v2
         with:
-          endpoint: https://weu.codesigning.azure.net/
-          signing-account-name: compelcon-signing
-          certificate-profile-name: ftdi-tools
+          endpoint: https://neu.codesigning.azure.net/
+          signing-account-name: Trusted-Signing-TJE1
+          certificate-profile-name: Compelcon-AB-MS-Code-signed
           files-folder: ${{ github.workspace }}\build\Release
           files-folder-filter: exe
           file-digest: SHA256

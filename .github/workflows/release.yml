@@ -89,9 +89,9 @@ jobs:
         # has not yet published a v1/v2 tag: add a step that calls
         #   pwsh -File scripts/sign-local.ps1 windows\build\Release\*.exe
         with:
-          endpoint:                   https://weu.codesigning.azure.net/
-          code-signing-account-name:  compelcon-signing
-          certificate-profile-name:   ftdi-tools
+          endpoint:                   https://neu.codesigning.azure.net/
+          code-signing-account-name:  Trusted-Signing-TJE1
+          certificate-profile-name:   Compelcon-AB-MS-Code-signed
           files-folder:               windows\build\Release
           files-folder-filter:        exe
           file-digest:                SHA256
