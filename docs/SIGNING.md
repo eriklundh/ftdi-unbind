@@ -87,9 +87,9 @@ Non-secret identifiers committed to the repo:
 ```json
 // signing.metadata.json
 {
-  "Endpoint": "https://weu.codesigning.azure.net/",
-  "CodeSigningAccountName": "compelcon-signing",
-  "CertificateProfileName": "ftdi-tools"
+  "Endpoint": "https://neu.codesigning.azure.net/",
+  "CodeSigningAccountName": "Trusted-Signing-TJE1",
+  "CertificateProfileName": "Compelcon-AB-MS-Code-signed"
 }
 ```
 

@@ -108,7 +108,11 @@ elevation. Don't automate them in a loop.
   Tools) and natively in Visual Studio 2022/2026. Static CRT (`/MT`) so
   the `.exe`s are self-contained and CRT-consistent with libwdi.
 - **Tests:** CTest driving small assert-based unit executables (zero
-  extra deps); Unity (MIT) is an optional upgrade.
+  extra deps); Unity (MIT) is an optional upgrade. The test exes and the
+  Phase-0 probe are **off by default** (not part of a Release) — configure
+  with `-DFTDI_BUILD_TESTS=ON` (or the `vs2022-x64-tests` preset) to build
+  and `ctest` them; they emit to `build/dev/`, the release exes to
+  `build/Release/`.
 - **Output:** two self-contained `.exe`s, no DLL dependencies (libwdi
   embeds its driver payload).
 

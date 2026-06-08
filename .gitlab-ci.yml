@@ -1,25 +1,72 @@
-default:
-  tags: [rpi5]
+# .gitlab-ci.yml
+#
+# Two independent pipelines, separated by `rules`:
+#
+#   * Branch / MR pipelines  -> hardware-in-the-loop tests on the rpi5 runner
+#                               (diagnose + bind/unbind cycle against a real FTDI).
+#   * Tag pipelines (v*)      -> publish a GitLab Release of the three signed
+#                               Windows exes + the Linux/macOS scripts + the
+#                               diagnosis scripts + an all-in-one bundle, each
+#                               covered by SHA256SUMS.
+#
+# SIGNING MODEL. GitHub Actions ALWAYS builds and signs on a tag (the canonical
+# signed build — .github/workflows/release.yml). This GitLab pipeline does ONE
+# of two things on a tag, decided by whether a Windows runner is available:
+#
+#   * `build-sign-native`  (CI/CD var GITLAB_HAS_WINDOWS_RUNNER == "true"):
+#        build + SIGN the exes locally on the `windows` runner and publish the
+#        GitLab Release from this local build.
+#   * `publish-from-github` (otherwise — the default):
+#        wait for GitHub's signed release, download its assets, and publish them
+#        to this Release tab.
+#
+# The two rules are mutually exclusive, so exactly one runs — never a double
+# release. Native signing reuses scripts/release-local.ps1 (the same path as the
+# local "big red button").
+#
+# CI/CD VARIABLES:
+#   * GITHUB_REPO                 owner/repo of the GitHub mirror (for the pull path)
+#   * GITHUB_TOKEN  (optional)    only if the GitHub repo/releases are private
+#   * GITLAB_HAS_WINDOWS_RUNNER   set "true" once you register a `windows` runner
+#   For native signing also: AZURE_TENANT_ID, AZURE_CLIENT_ID,
+#   AZURE_SUBSCRIPTION_ID (+ AZURE_CLIENT_SECRET, Masked+Protected, only for the
+#   client-secret fallback). Run scripts/setup-gitlab-oidc.ps1 to set up OIDC.
+#   A `windows` runner needs VS 2022 C++ tools, CMake 3.20+, Azure CLI, and
+#   Microsoft.Azure.TrustedSigningClientTools (see windows/docs/SIGNING-AZURE-ARTIFACT.md).
 
 variables:
   FTDI_VID_PID: "0403:6015"
+  # GitHub mirror to pull signed assets from when GitLab has no Windows runner.
+  GITHUB_REPO: "compelcon/ftdi-unbind"          # adjust to your GitHub path
+  # GitLab Generic Package Registry location for the release assets.
+  PKG_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/ftdi-tools/${CI_COMMIT_TAG}"
+  # libwdi version pinned in scripts/build-libwdi.ps1 (cache key).
+  LIBWDI_VERSION: "v1.5.0"
 
 stages:
   - diagnose
   - cycle
+  - release
 
-# Run diagnosis.sh and capture its output. Always exits 0 (diagnostic, not
-# assertive) — the job serves as a live snapshot of device state in the CI log.
+# ── Hardware-in-the-loop tests — branch / MR pipelines only ──────────────────
+# (Excluded from tag pipelines so a release never waits on the Pi + device.)
+.hw_rules: &hw_rules
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - when: on_success
+
 diagnose:
   stage: diagnose
+  tags: [rpi5]
+  <<: *hw_rules
   script:
     - bash diagnosis.sh "$FTDI_VID_PID"
 
-# Unbind ftdi_sio, verify the tty node disappears, rebind, verify it returns.
-# after_script always attempts a rebind so the runner host stays usable even
-# if the test fails midway.
 bind-unbind-cycle:
   stage: cycle
+  tags: [rpi5]
+  <<: *hw_rules
   script:
     - sudo macos-linux/ftdi-unbind "$FTDI_VID_PID"
     - sleep 1
@@ -29,3 +76,139 @@ bind-unbind-cycle:
     - 'ls /dev/ttyUSB* 2>/dev/null && echo "PASS: ttyUSB* present after rebind" || { echo "FAIL: no ttyUSB* after rebind"; exit 1; }'
   after_script:
     - sudo macos-linux/ftdi-bind "$FTDI_VID_PID" 2>/dev/null || true
+
+# ── Tag path A: native build + sign on a GitLab Windows runner ───────────────
+build-sign-native:
+  stage: release
+  tags: [windows]
+  rules:
+    - if: '$CI_COMMIT_TAG && $GITLAB_HAS_WINDOWS_RUNNER == "true"'
+  needs: []
+  id_tokens:
+    AZURE_FEDERATED_TOKEN:        # OIDC token GitLab mints for this job
+      aud: api://AzureADTokenExchange
+  cache:
+    key: "libwdi-$LIBWDI_VERSION-windows"
+    paths:
+      - libwdi-out/
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+  script:
+    - |
+      $ErrorActionPreference = 'Stop'
+      # 1) libwdi — restore from cache or build it once
+      if (-not (Test-Path libwdi-out/lib/libwdi.lib)) {
+        pwsh -File scripts/build-libwdi.ps1 -LibwdiDir libwdi-src -OutDir libwdi-out
+        if ($LASTEXITCODE) { throw "libwdi build failed" }
+      }
+    - |
+      $ErrorActionPreference = 'Stop'
+      # 2) Azure login — OIDC federated token preferred, client secret fallback
+      if ($env:AZURE_CLIENT_ID -and $env:AZURE_FEDERATED_TOKEN) {
+        az login --service-principal -u $env:AZURE_CLIENT_ID -t $env:AZURE_TENANT_ID --federated-token $env:AZURE_FEDERATED_TOKEN | Out-Null
+      } elseif ($env:AZURE_CLIENT_ID -and $env:AZURE_CLIENT_SECRET) {
+        az login --service-principal -u $env:AZURE_CLIENT_ID -t $env:AZURE_TENANT_ID -p $env:AZURE_CLIENT_SECRET | Out-Null
+      } else {
+        throw "No Azure credentials. Set AZURE_CLIENT_ID + OIDC (or AZURE_CLIENT_SECRET) as CI/CD variables."
+      }
+      if ($LASTEXITCODE) { throw "az login failed" }
+    - |
+      $ErrorActionPreference = 'Stop'
+      # 3) build + test + SIGN + Windows package (reuses the local release button)
+      pwsh -File scripts/release-local.ps1 -Version $env:CI_COMMIT_TAG `
+        -LibwdiIncludeDir "$env:CI_PROJECT_DIR/libwdi-out/include" `
+        -LibwdiLib "$env:CI_PROJECT_DIR/libwdi-out/lib/libwdi.lib"
+      if ($LASTEXITCODE) { throw "release-local.ps1 failed" }
+    - |
+      $ErrorActionPreference = 'Stop'
+      # 4) add Linux/macOS tarball + diagnosis scripts + all-in-one bundle; re-hash
+      $tag = $env:CI_COMMIT_TAG
+      $stage = "ftdi-tools-$tag"
+      New-Item -ItemType Directory -Force "$stage/windows","$stage/linux-macos" | Out-Null
+      Copy-Item dist/ftdi-unbind.exe,dist/ftdi-bind.exe,dist/ftdi-doctor.exe "$stage/windows"
+      Copy-Item macos-linux/ftdi-unbind,macos-linux/ftdi-bind "$stage/linux-macos"
+      Copy-Item diagnosis.ps1,diagnosis.cmd,diagnosis.sh,README.md $stage
+      tar -czf "dist/ftdi-tools-$tag-linux-macos.tar.gz" -C macos-linux ftdi-unbind ftdi-bind
+      Compress-Archive -Path $stage -DestinationPath "dist/ftdi-tools-$tag-all.zip" -Force
+      Copy-Item diagnosis.ps1,diagnosis.cmd,diagnosis.sh dist/
+      Remove-Item dist/SHA256SUMS -ErrorAction SilentlyContinue
+      $sums = Get-ChildItem dist -File | ForEach-Object {
+        "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
+      Set-Content dist/SHA256SUMS $sums -Encoding ascii
+    - |
+      $ErrorActionPreference = 'Stop'
+      # 5) upload every asset to the Generic Package Registry
+      Get-ChildItem dist -File | ForEach-Object {
+        Invoke-RestMethod -Method Put -Headers @{ 'JOB-TOKEN' = $env:CI_JOB_TOKEN } `
+          -InFile $_.FullName -Uri "$env:PKG_URL/$($_.Name)" | Out-Null
+        Write-Host "uploaded $($_.Name)"
+      }
+    - |
+      $ErrorActionPreference = 'Stop'
+      # 6) create the GitLab Release linking the uploaded assets
+      $tag = $env:CI_COMMIT_TAG
+      $names = @(
+        "ftdi-tools-$tag-windows-x64.zip",
+        "ftdi-tools-$tag-linux-macos.tar.gz",
+        "ftdi-tools-$tag-all.zip",
+        "diagnosis.ps1","diagnosis.cmd","diagnosis.sh","SHA256SUMS")
+      $links = $names | ForEach-Object { @{ name = $_; url = "$env:PKG_URL/$_" } }
+      $body = @{ name = "ftdi-unbind $tag"; tag_name = $tag
+        description = "Signed natively on GitLab. Verify downloads against SHA256SUMS."
+        assets = @{ links = $links } } | ConvertTo-Json -Depth 6
+      Invoke-RestMethod -Method Post -Uri "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/releases" `
+        -Headers @{ 'JOB-TOKEN' = $env:CI_JOB_TOKEN; 'Content-Type' = 'application/json' } -Body $body | Out-Null
+      Write-Host "Release $tag created (native)."
+
+# ── Tag path B: no Windows runner — wait for GitHub, publish what it signed ───
+publish-from-github:
+  stage: release
+  tags: [rpi5]                    # any Linux runner; the Pi is fine (no signing here)
+  rules:
+    - if: '$CI_COMMIT_TAG && $GITLAB_HAS_WINDOWS_RUNNER != "true"'
+  needs: []
+  variables:
+    GITHUB_WAIT_SECONDS: "1800"   # how long to wait for GitHub's signed release
+  script:
+    - |
+      set -euo pipefail
+      tag="$CI_COMMIT_TAG"
+      ghapi="https://api.github.com/repos/${GITHUB_REPO}/releases/tags/${tag}"
+      auth=()
+      if [ -n "${GITHUB_TOKEN:-}" ]; then auth=(-H "Authorization: Bearer ${GITHUB_TOKEN}"); fi
+      # 1) wait for GitHub to finish building + signing this tag's release
+      deadline=$(( $(date +%s) + GITHUB_WAIT_SECONDS ))
+      until json=$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" "$ghapi" 2>/dev/null); do
+        if [ "$(date +%s)" -ge "$deadline" ]; then
+          echo "Timed out waiting for the GitHub release $tag"; exit 1
+        fi
+        echo "waiting for GitHub release $tag ..."; sleep 30
+      done
+      # 2) download every asset GitHub signed
+      mkdir -p dist
+      urls=$(printf '%s' "$json" | grep -o '"browser_download_url": *"[^"]*"' | sed 's/.*"\(https[^"]*\)"/\1/')
+      [ -n "$urls" ] || { echo "no assets on GitHub release $tag"; exit 1; }
+      for u in $urls; do
+        echo "downloading $(basename "$u")"
+        curl -fsSL "${auth[@]}" -o "dist/$(basename "$u")" "$u"
+      done
+    - |
+      set -euo pipefail
+      # 3) upload to the GitLab Generic Package Registry
+      for f in dist/*; do
+        echo "uploading $(basename "$f")"
+        curl --fail -sS --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+          --upload-file "$f" "${PKG_URL}/$(basename "$f")"
+      done
+    - |
+      set -euo pipefail
+      # 4) create the GitLab Release linking the uploaded assets
+      relApi="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
+      links=$(for f in dist/*; do n=$(basename "$f"); printf '{"name":"%s","url":"%s/%s"},' "$n" "$PKG_URL" "$n"; done | sed 's/,$//')
+      curl --fail -sS --request POST \
+        --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --header "Content-Type: application/json" \
+        --data "{\"name\":\"ftdi-unbind ${CI_COMMIT_TAG}\",\"tag_name\":\"${CI_COMMIT_TAG}\",\"description\":\"Signed by GitHub, mirrored here. Verify downloads against SHA256SUMS.\",\"assets\":{\"links\":[${links}]}}" \
+        "$relApi"
+      echo "Release ${CI_COMMIT_TAG} created (from GitHub build)."

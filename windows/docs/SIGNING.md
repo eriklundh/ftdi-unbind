@@ -94,9 +94,9 @@ Sketch (the live step lands in `CI.md`'s `release.yml`):
     with:
       azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
       azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-      endpoint: https://weu.codesigning.azure.net/   # your region
-      trusted-signing-account-name: <account>
-      certificate-profile-name: <profile>
+      endpoint: https://neu.codesigning.azure.net/   # North Europe (this account)
+      trusted-signing-account-name: Trusted-Signing-TJE1
+      certificate-profile-name: Compelcon-AB-MS-Code-signed
       files-folder: ${{ github.workspace }}/build/Release
       files-folder-filter: exe
   # Certum SimplySign alternative: a signtool step gated the same way,

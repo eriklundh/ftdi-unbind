@@ -428,7 +428,7 @@ Steps (human, on the laptop):
 1. **Confirm the account is alive (do this first).** Azure portal →
    Artifact Signing → your account: identity validation **Completed**,
    certificate profile is **Public Trust**, and note the **region
-   endpoint** (West Europe → `https://weu.codesigning.azure.net/`). If the
+   endpoint** (this account is North Europe → `https://neu.codesigning.azure.net/`). If the
    identity is an EU *individual* rather than an *organization*, stop:
    Public Trust is not available to EU individuals (see the doc) — you'll
    need an org identity.

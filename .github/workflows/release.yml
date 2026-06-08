@@ -8,10 +8,17 @@
 # so forks build cleanly unsigned without any credential access.
 #
 # Artifacts attached to the release:
-#   ftdi-tools-<version>-windows-x64.zip   (all three exes, signed when possible)
+#   ftdi-tools-<version>-windows-x64.zip    (the three signed exes)
 #   ftdi-tools-<version>-linux-macos.tar.gz (bash scripts for Linux and macOS)
-#   SHA256SUMS
+#   diagnosis.ps1 / diagnosis.cmd / diagnosis.sh   (standalone diagnostic scripts)
+#   ftdi-tools-<version>-all.zip            (everything above, one bundle)
+#   SHA256SUMS                               (covers every asset)
 #   SHA256SUMS.sig                          (GPG — when GPG_PRIVATE_KEY is set)
+#
+# This workflow ALWAYS builds and signs on a tag — it is the canonical signed
+# build. The mirrored GitLab project either signs natively (if it has a Windows
+# runner) or pulls the assets this workflow produced; either way GitHub does its
+# own thing here unconditionally. See docs/PUBLISHING-AND-SECRETS.md.
 
 name: Release
 
@@ -56,6 +63,7 @@ jobs:
         run: |
           cmake -S windows -B windows\build ^
             -G "Visual Studio 17 2022" -A x64 ^
+            -DFTDI_BUILD_TESTS=ON ^
             -DLIBWDI_INCLUDE_DIR=%CD%\libwdi-out\include ^
             -DLIBWDI_LIB=%CD%\libwdi-out\lib\libwdi.lib
 
@@ -89,9 +97,9 @@ jobs:
         # has not yet published a v1/v2 tag: add a step that calls
         #   pwsh -File scripts/sign-local.ps1 windows\build\Release\*.exe
         with:
-          endpoint:                   https://weu.codesigning.azure.net/
-          code-signing-account-name:  compelcon-signing
-          certificate-profile-name:   ftdi-tools
+          endpoint:                   https://neu.codesigning.azure.net/
+          code-signing-account-name:  Trusted-Signing-TJE1
+          certificate-profile-name:   Compelcon-AB-MS-Code-signed
           files-folder:               windows\build\Release
           files-folder-filter:        exe
           file-digest:                SHA256
@@ -176,8 +184,26 @@ jobs:
           done
           find dist -mindepth 1 -maxdepth 1 -type d -delete
 
+      - name: Assemble diagnosis scripts + combined "everything" bundle
+        run: |
+          tag="${{ github.ref_name }}"
+          stage="ftdi-tools-${tag}"
+          mkdir -p "$stage/windows" "$stage/linux-macos"
+          # signed Windows exes (extracted from the per-platform zip)
+          unzip -j "dist/ftdi-tools-${tag}-windows-x64.zip"     -d "$stage/windows"
+          # Linux/macOS scripts
+          tar  -xzf "dist/ftdi-tools-${tag}-linux-macos.tar.gz" -C "$stage/linux-macos"
+          # cross-platform diagnostic scripts + the top-level readme
+          cp diagnosis.ps1 diagnosis.cmd diagnosis.sh README.md "$stage/"
+          # one bundle with everything
+          zip -r "dist/ftdi-tools-${tag}-all.zip" "$stage"
+          # also expose the diagnosis scripts as standalone, individually downloadable assets
+          cp diagnosis.ps1 diagnosis.cmd diagnosis.sh dist/
+
       - name: Compute SHA256SUMS
         working-directory: dist
+        # Hashes every asset now in dist/: per-platform archives, the all-in-one
+        # bundle, and the three standalone diagnosis scripts.
         run: sha256sum * > SHA256SUMS
 
       - name: Sign SHA256SUMS with GPG (gated)

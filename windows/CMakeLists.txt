@@ -20,13 +20,28 @@ if(NOT LIBWDI_INCLUDE_DIR OR NOT LIBWDI_LIB)
         "    -DLIBWDI_LIB=C:/usr/local/src/libwdi/x64/Release/lib/libwdi.lib")
 endif()
 
+# Research / developer executables — the Phase-0 probe and the unit/CLI test
+# exes — are NOT part of a Release. They are excluded from the normal build
+# (the default ALL target), so a plain `cmake --build` produces only the three
+# shippable tools (ftdi-unbind, ftdi-bind, ftdi-doctor). Enable them for CI and
+# local TDD with -DFTDI_BUILD_TESTS=ON. When enabled they are emitted to
+# build/dev/ instead of build/<config>/, so they never sit next to the release
+# exes — keeping the signing and packaging globs clean.
+option(FTDI_BUILD_TESTS
+    "Build the Phase-0 probe and unit/CLI test executables (not shipped)" OFF)
+set(FTDI_DEV_BIN_DIR "${CMAKE_BINARY_DIR}/dev")
+
 # Phase 0: build-skeleton probe — prints the libwdi version to confirm the
 # toolchain + static link are working before any real logic is added.
-add_executable(ftdi-rebind-probe src/probe.c)
-target_include_directories(ftdi-rebind-probe PRIVATE ${LIBWDI_INCLUDE_DIR})
-target_link_libraries(ftdi-rebind-probe PRIVATE
-    ${LIBWDI_LIB}
-    setupapi cfgmgr32 ole32 newdev)
+if(FTDI_BUILD_TESTS)
+    add_executable(ftdi-rebind-probe src/probe.c)
+    target_include_directories(ftdi-rebind-probe PRIVATE ${LIBWDI_INCLUDE_DIR})
+    target_link_libraries(ftdi-rebind-probe PRIVATE
+        ${LIBWDI_LIB}
+        setupapi cfgmgr32 ole32 newdev)
+    set_target_properties(ftdi-rebind-probe PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${FTDI_DEV_BIN_DIR}")
+endif()
 
 # Phase 1: pure core — VID:PID matching, arg parsing.
 # No libwdi, no Windows-driver APIs: the OBJECT library compiles with zero
@@ -37,17 +52,21 @@ add_library(ftdi_core OBJECT
     src/comdb.c)
 target_include_directories(ftdi_core PUBLIC src)
 
-enable_testing()
+if(FTDI_BUILD_TESTS)
+    enable_testing()
 
-foreach(_test match args restore comdb)
-    add_executable(test_${_test} tests/test_${_test}.c)
-    target_link_libraries(test_${_test} PRIVATE ftdi_core)
-    # /UNDEBUG keeps assert() active even in Release so CTest catches failures.
-    target_compile_options(test_${_test} PRIVATE
-        $<$<C_COMPILER_ID:MSVC>:/UNDEBUG>
-        $<$<NOT:$<C_COMPILER_ID:MSVC>>:-UNDEBUG>)
-    add_test(NAME ${_test} COMMAND $<TARGET_FILE:test_${_test}>)
-endforeach()
+    foreach(_test match args restore comdb)
+        add_executable(test_${_test} tests/test_${_test}.c)
+        target_link_libraries(test_${_test} PRIVATE ftdi_core)
+        # /UNDEBUG keeps assert() active even in Release so CTest catches failures.
+        target_compile_options(test_${_test} PRIVATE
+            $<$<C_COMPILER_ID:MSVC>:/UNDEBUG>
+            $<$<NOT:$<C_COMPILER_ID:MSVC>>:-UNDEBUG>)
+        set_target_properties(test_${_test} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${FTDI_DEV_BIN_DIR}")
+        add_test(NAME ${_test} COMMAND $<TARGET_FILE:test_${_test}>)
+    endforeach()
+endif()
 
 # Phase 2: enum.c needs libwdi — kept in its own OBJECT lib so ftdi_core stays
 # dep-free and unit tests remain buildable without admin or hardware.
@@ -94,13 +113,17 @@ target_link_libraries(ftdi-doctor PRIVATE
 
 # Phase 6: CLI exit-code parity tests — spawn each exe and check the exit code.
 # Exe paths injected via compile definitions so the test is device- and admin-free.
-add_executable(test_cli tests/test_cli.c)
-target_compile_definitions(test_cli PRIVATE
-    UNBIND_EXE="$<TARGET_FILE:ftdi-unbind>"
-    BIND_EXE="$<TARGET_FILE:ftdi-bind>"
-    DOCTOR_EXE="$<TARGET_FILE:ftdi-doctor>")
-target_compile_options(test_cli PRIVATE
-    $<$<C_COMPILER_ID:MSVC>:/UNDEBUG>
-    $<$<NOT:$<C_COMPILER_ID:MSVC>>:-UNDEBUG>)
-add_dependencies(test_cli ftdi-unbind ftdi-bind ftdi-doctor)
-add_test(NAME cli COMMAND $<TARGET_FILE:test_cli>)
+if(FTDI_BUILD_TESTS)
+    add_executable(test_cli tests/test_cli.c)
+    target_compile_definitions(test_cli PRIVATE
+        UNBIND_EXE="$<TARGET_FILE:ftdi-unbind>"
+        BIND_EXE="$<TARGET_FILE:ftdi-bind>"
+        DOCTOR_EXE="$<TARGET_FILE:ftdi-doctor>")
+    target_compile_options(test_cli PRIVATE
+        $<$<C_COMPILER_ID:MSVC>:/UNDEBUG>
+        $<$<NOT:$<C_COMPILER_ID:MSVC>>:-UNDEBUG>)
+    set_target_properties(test_cli PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${FTDI_DEV_BIN_DIR}")
+    add_dependencies(test_cli ftdi-unbind ftdi-bind ftdi-doctor)
+    add_test(NAME cli COMMAND $<TARGET_FILE:test_cli>)
+endif()

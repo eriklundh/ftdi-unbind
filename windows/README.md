@@ -118,11 +118,24 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64 ^
     -DLIBWDI_LIB=C:\path\to\libwdi\x64\Release\lib\libwdi.lib
 
 cmake --build build --config Release
+```
+
+This builds only the three shippable tools (`ftdi-unbind.exe`,
+`ftdi-bind.exe`, `ftdi-doctor.exe`) into `build\Release\`.  The Phase-0
+probe and the unit/CLI tests are **not** part of a Release and are off by
+default; add `-DFTDI_BUILD_TESTS=ON` to build and run them:
+
+```
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DFTDI_BUILD_TESTS=ON ^
+    -DLIBWDI_INCLUDE_DIR=C:\path\to\libwdi\libwdi ^
+    -DLIBWDI_LIB=C:\path\to\libwdi\x64\Release\lib\libwdi.lib
+cmake --build build --config Release
 ctest --test-dir build -C Release
 ```
 
-The unit tests (`ctest`) do not need admin or hardware.  The driver
-install/restore integration tests do — see
+The test/probe exes land in `build\dev\` so they never sit beside the
+release exes.  The unit tests (`ctest`) do not need admin or hardware.
+The driver install/restore integration tests do — see
 [`docs/BUILD-ENVIRONMENT.md`](docs/BUILD-ENVIRONMENT.md).
 
 ## Why does Windows warn about these binaries?
