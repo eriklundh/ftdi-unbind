@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # packaging/update-packaging.sh — update packaging manifests for a new release.
+# Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
 #
 # Usage:
 #   bash packaging/update-packaging.sh <tag>

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # install.sh — install or uninstall ftdi-unbind / ftdi-bind
+# Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
 #
 # Usage:
 #   bash install.sh [--prefix <dir>] [--uninstall]

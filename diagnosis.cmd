@@ -1,5 +1,6 @@
 @echo off
 :: diagnosis.cmd — run the FTDI diagnosis from a legacy Command Prompt (CMD).
+:: Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
 ::
 :: This is a thin wrapper.  The actual diagnostic work is done in PowerShell
 :: by diagnosis.ps1, which lives in the same folder as this file.

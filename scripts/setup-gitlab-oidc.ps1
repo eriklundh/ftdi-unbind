@@ -1,4 +1,5 @@
 # scripts/setup-gitlab-oidc.ps1
+# Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
 #
 # One-shot setup of signing auth for the GitLab release pipeline. Reuses the
 # SAME Entra App Registration as the GitHub setup (scripts/setup-github-oidc.ps1)

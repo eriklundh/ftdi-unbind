@@ -1,4 +1,5 @@
 # scripts/build-libwdi.ps1
+# Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
 #
 # Clone libwdi v1.5.0, apply the patches required to build without the WDK
 # co-installer DLLs (Windows 8+ in-box WinUSB), and build the static lib.

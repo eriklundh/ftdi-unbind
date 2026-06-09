@@ -4,6 +4,7 @@
 #
 # Re-attach the FTDI kernel driver to a USB device matched by VID:PID.
 # Counterpart to ftdi-unbind.  A device unplug/replug also rebinds.
+# Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
 #
 #   Linux:  rebinds ftdi_sio to driverless interfaces via sysfs.
 #           Never steals an interface already owned by another driver.

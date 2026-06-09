@@ -1,4 +1,5 @@
 # scripts/release-local.ps1
+# Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
 #
 #   ███  THE BIG RED BUTTON  ███
 #

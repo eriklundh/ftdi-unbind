@@ -25,6 +25,7 @@
 
 .NOTES
     Part of the ftdi-unbind toolkit.
+    Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
     Repository: gitlab.compelcon.se/unified-serial-terminal/ftdi-unbind
 #>
 param(

@@ -1,4 +1,5 @@
 # scripts/sign-local.ps1
+# Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
 #
 # Sign one or more executables using Azure Artifact Signing.
 # Reads endpoint/account/profile from signing.metadata.json (non-secret).

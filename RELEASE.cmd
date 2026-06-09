@@ -5,6 +5,7 @@ REM Output lands in dist\. Pass-through args work too, e.g.:
 REM   RELEASE.cmd -SkipTests
 REM   RELEASE.cmd -Version v0.2.0
 REM The window stays open at the end so you can read the result.
+REM Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
 cd /d "%~dp0"
 pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\release-local.ps1" %*
 echo.

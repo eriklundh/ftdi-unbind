@@ -4,6 +4,7 @@
 #
 # Detach the FTDI kernel driver from a USB device matched by VID:PID,
 # freeing it for WebUSB, libusb, or pyftdi.
+# Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
 #
 #   Linux:  unbinds ftdi_sio per interface via sysfs.
 #   macOS:  unloads AppleUSBFTDI / FTDIUSBSerialDriver kext(s).

@@ -1,4 +1,5 @@
 # scripts/setup-github-oidc.ps1
+# Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
 #
 # One-shot setup of secretless (OIDC) signing for the GitHub release workflow.
 # Creates an Entra App Registration WITHOUT a client secret, grants it the
