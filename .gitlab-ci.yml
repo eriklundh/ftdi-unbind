@@ -165,7 +165,10 @@ build-sign-native:
 # ── Tag path B: no Windows runner — wait for GitHub, publish what it signed ───
 publish-from-github:
   stage: release
-  tags: [rpi5]                    # any Linux runner; the Pi is fine (no signing here)
+  # Untagged on purpose: any Linux runner can do this (it only polls GitHub
+  # and republishes assets — no signing, no hardware). Keeping it untagged
+  # means the release pushes through on the Agentlab1 runner even when the
+  # Pi 5 (which serves the hil test jobs above) is offline.
   rules:
     - if: '$CI_COMMIT_TAG && $GITLAB_HAS_WINDOWS_RUNNER != "true"'
   needs: []
