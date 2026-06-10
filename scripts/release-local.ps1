@@ -172,9 +172,12 @@ try {
     New-Item -ItemType Directory -Path $DistDir | Out-Null
     Copy-Item $paths -Destination $DistDir
 
+    # GPL-3.0 text must travel with the binaries (they statically link LGPL libwdi)
+    $licensePath = Join-Path $RepoRoot 'windows\LICENSE'
+
     $zipName = "ftdi-tools-$Version-windows-x64.zip"
     $zipPath = Join-Path $DistDir $zipName
-    Compress-Archive -Path $paths -DestinationPath $zipPath -Force
+    Compress-Archive -Path (@($paths) + $licensePath) -DestinationPath $zipPath -Force
     Ok $zipName
 
     # SHA256SUMS — `sha256sum -c` compatible (lowercase hash, two spaces, bare names).

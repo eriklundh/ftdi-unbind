@@ -123,4 +123,15 @@ Zadig itself.
 
 ---
 
+## License
+
+- **Shell and PowerShell tooling** (diagnosis scripts, `macos-linux/`
+  bind/unbind, `install.sh`, `scripts/`): **MIT** — see [LICENSE](LICENSE).
+- **Windows tools** (`windows/`, the `.exe` binaries): **GPL-3.0-only** —
+  see [windows/LICENSE](windows/LICENSE). The GPL is required because the
+  binaries statically link [libwdi](https://github.com/pbatard/libwdi)
+  (LGPL-3.0); it also satisfies LGPL's relink requirement.
+
+---
+
 Developers and contributors: see [DEVELOPER.md](DEVELOPER.md).

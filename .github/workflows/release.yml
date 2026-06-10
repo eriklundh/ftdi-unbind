@@ -122,7 +122,8 @@ jobs:
           Compress-Archive -Path `
             windows\build\Release\ftdi-unbind.exe, `
             windows\build\Release\ftdi-bind.exe, `
-            windows\build\Release\ftdi-doctor.exe `
+            windows\build\Release\ftdi-doctor.exe, `
+            windows\LICENSE `
             -DestinationPath $zip
           echo "ZIP=$zip" >> $env:GITHUB_ENV
 
@@ -150,7 +151,7 @@ jobs:
       - name: Create tarball
         run: |
           tar -czf "ftdi-tools-${{ steps.ver.outputs.tag }}-linux-macos.tar.gz" \
-            -C macos-linux ftdi-unbind ftdi-bind
+            -C macos-linux ftdi-unbind ftdi-bind -C .. LICENSE
           echo "TAR=ftdi-tools-${{ steps.ver.outputs.tag }}-linux-macos.tar.gz" >> "$GITHUB_ENV"
 
       - name: Upload Unix artifact
@@ -193,8 +194,9 @@ jobs:
           unzip -j "dist/ftdi-tools-${tag}-windows-x64.zip"     -d "$stage/windows"
           # Linux/macOS scripts
           tar  -xzf "dist/ftdi-tools-${tag}-linux-macos.tar.gz" -C "$stage/linux-macos"
-          # cross-platform diagnostic scripts + the top-level readme
-          cp diagnosis.ps1 diagnosis.cmd diagnosis.sh README.md "$stage/"
+          # cross-platform diagnostic scripts + the top-level readme + MIT license
+          # (the GPL-3.0 text for the exes arrives via the windows zip extraction)
+          cp diagnosis.ps1 diagnosis.cmd diagnosis.sh README.md LICENSE "$stage/"
           # one bundle with everything
           zip -r "dist/ftdi-tools-${tag}-all.zip" "$stage"
           # also expose the diagnosis scripts as standalone, individually downloadable assets
