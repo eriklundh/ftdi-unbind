@@ -1,2 +1,2 @@
-# Local signed-release output (produced by RELEASE.cmd / scripts/release-local.ps1)
+# Local signed-release output (produced by scripts/RELEASE.cmd / scripts/release-local.ps1)
 /dist/

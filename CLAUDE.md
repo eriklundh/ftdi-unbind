@@ -64,7 +64,7 @@ pnputil driver store listing (default: count summary only).
 **Windows C tools** (`windows/` subdirectory) — phases 0–8 complete
 (build, enumerate, install WinUSB, restore VCP, dual-exe CLI, release
 packaging). Code signing (phases 9–11) is wired: local "big red button"
-(`scripts/release-local.ps1` / `RELEASE.cmd`) and CI signing via Azure
+(`scripts/release-local.ps1` / `scripts/RELEASE.cmd`) and CI signing via Azure
 Artifact Signing OIDC. No signed release has been *published* yet — see the
 publishing handoff below.
 
