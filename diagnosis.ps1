@@ -26,7 +26,7 @@
 .NOTES
     Part of the ftdi-unbind toolkit.
     Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
-    Repository: gitlab.compelcon.se/unified-serial-terminal/ftdi-unbind
+    Repository: github.com/eriklundh/ftdi-unbind
 #>
 param(
     [string]$VidPid = '0403:6015',
@@ -642,8 +642,7 @@ Write-Host ("  " + ("─" * 66)) -ForegroundColor DarkCyan
 Write-Host ""
 Write-Explain @"
 Download pre-built Windows binaries from the Releases page:
-  GitLab: gitlab.compelcon.se/unified-serial-terminal/ftdi-unbind/-/releases
-  GitHub: check the repository for the mirror link
+  github.com/eriklundh/ftdi-unbind/releases
 
 Available tools (x64, no installer, no DLL dependencies):
 

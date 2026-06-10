@@ -11,7 +11,7 @@
 #   Microsoft Entra must be able to fetch
 #     <GitLabUrl>/.well-known/openid-configuration
 #   over the PUBLIC internet with valid TLS. For a private / air-gapped
-#   gitlab.compelcon.se this is the crux: if Entra cannot reach the discovery
+#   instance this is the crux: if Entra cannot reach the discovery
 #   document it cannot validate the token, and OIDC is impossible. In that case
 #   run with -CreateClientSecret and use the AZURE_CLIENT_SECRET fallback
 #   (store it as a Masked + Protected GitLab CI/CD variable).
@@ -28,7 +28,8 @@ param(
     [Parameter(Mandatory)]
     [string]$GitLabProject,                              # "group/subgroup/project" path
 
-    [string]$GitLabUrl          = "https://gitlab.compelcon.se",
+    [Parameter(Mandatory)]
+    [string]$GitLabUrl,                                  # e.g. https://<gitlab-instance> (see CLAUDE.md)
     [string]$TagPattern         = "v*",                  # which tags may sign
 
     [string]$AppName            = "ftdi-unbind-ci-signing",   # shared with the GitHub setup

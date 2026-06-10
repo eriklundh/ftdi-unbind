@@ -37,8 +37,9 @@ trust is **bound to our repo + ref**, so a fork cannot reuse it.
   only the three identifiers above as Actions secrets. Run
   [`scripts/setup-github-oidc.ps1`](../scripts/setup-github-oidc.ps1) to create
   all of this in one go.
-- **GitLab (`gitlab.compelcon.se`):** same model **iff** Microsoft Entra can
-  reach `https://gitlab.compelcon.se/.well-known/openid-configuration` over the
+- **GitLab (the internal instance — URL in the root `CLAUDE.md`):** same
+  model **iff** Microsoft Entra can reach
+  `https://<gitlab-instance>/.well-known/openid-configuration` over the
   public internet with valid TLS.
   [`scripts/setup-gitlab-oidc.ps1`](../scripts/setup-gitlab-oidc.ps1) adds a
   *second* federated credential to the *same* App Registration. If the instance

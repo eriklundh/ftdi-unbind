@@ -19,16 +19,17 @@ platform-specific build and test details.
 ## Git origin
 
 ```
-git@gitlab.compelcon.se:unified-serial-terminal/ftdi-unbind.git
+https://github.com/eriklundh/ftdi-unbind.git
 ```
 
-The project is host-agnostic and may be mirrored to GitHub. The canonical
-public mirror for releases is **github.com/eriklundh/ftdi-unbind**.
+The public repository and Releases page live on GitHub
+(**github.com/eriklundh/ftdi-unbind**). The project is host-agnostic; the
+internal canonical remote is documented in `CLAUDE.md`.
 
 ## Quick start
 
 ```sh
-git clone git@gitlab.compelcon.se:unified-serial-terminal/ftdi-unbind.git
+git clone https://github.com/eriklundh/ftdi-unbind.git
 cd ftdi-unbind
 ```
 

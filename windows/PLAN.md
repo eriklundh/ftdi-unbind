@@ -520,7 +520,7 @@ Acceptance:
 Branch: `phase/11-gitlab-signing`
 
 **Goal:** The same signing on your self-managed GitLab
-(`gitlab.compelcon.se`), running on a **Windows runner** (Authenticode PE
+(URL in the root `CLAUDE.md`), running on a **Windows runner** (Authenticode PE
 signing is Windows-only), authenticating to Azure. Prefer GitLab→Entra
 **OIDC workload-identity federation** (no stored secret); fall back to a
 **service-principal client secret** in a masked+protected CI/CD variable if
@@ -536,9 +536,9 @@ Steps:
 2. **Human (Azure side), choose one:**
    - **OIDC (preferred):** add a second **federated identity credential** to
      the *same* App Registration from Phase 10, with issuer =
-     `https://gitlab.compelcon.se` and subject = your GitLab project/ref
+     `https://<gitlab-instance>` and subject = your GitLab project/ref
      claim. **Pre-req:** Microsoft Entra must be able to fetch
-     `https://gitlab.compelcon.se/.well-known/openid-configuration` over the
+     `https://<gitlab-instance>/.well-known/openid-configuration` over the
      public internet with valid TLS. If the instance is **not** publicly
      reachable, federation can't work — use the secret path.
    - **Client secret (fallback):** create a client secret on the App

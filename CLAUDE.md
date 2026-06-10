@@ -87,7 +87,7 @@ This captures cross-host infra set up outside the code, so any Claude can
 resume. **No secrets are written here by design** — read identifiers with
 `az` / `gh`; see `docs/PUBLISHING-AND-SECRETS.md`.
 
-**Topology.** GitLab `gitlab.compelcon.se/unified-serial-terminal/*` is
+**Topology.** The internal GitLab (the *Git origin* above) is
 canonical and **push-mirrors** to public GitHub `eriklundh/*`. GitHub Actions
 always builds + signs on a `v*` tag (the authoritative signed build); the
 GitLab tag pipeline either signs natively (if it has a `windows` runner) or
@@ -135,8 +135,10 @@ pulls GitHub's signed assets (`publish-from-github`).
    SHA256SUMS.
 
 **Open content decisions (non-blocking):**
-- Diagnosis scripts point downloads at `gitlab.compelcon.se/.../-/releases`;
-  decide whether to also/instead point public users at the GitHub releases.
+- Download/release links — **resolved 2026-06-10:** every public-facing
+  URL (diagnosis scripts, DEVELOPER.md, signing docs) points at
+  github.com/eriklundh/ftdi-unbind. The internal GitLab group URL appears
+  in this file only; other docs say `<gitlab-instance>`.
 - winget package ID `Compelcon.FtdiUnbind` — keep (company/signer branding)
   or rebrand under eriklundh.
 

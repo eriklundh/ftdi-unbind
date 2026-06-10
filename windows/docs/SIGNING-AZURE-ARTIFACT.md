@@ -196,7 +196,7 @@ jobs:
 A fork without the federated credential: the two steps no-op, the build
 succeeds, unsigned exes attach. Your identity is never reachable.
 
-## GitLab (Phase 10) — self-managed, `gitlab.compelcon.se`
+## GitLab (Phase 10) — self-managed (instance URL in the root `CLAUDE.md`)
 
 Two hard constraints:
 
@@ -207,10 +207,10 @@ Two hard constraints:
 
 **Preferred — OIDC workload-identity federation (no stored secret):** add a
 **second** federated credential to the *same* App Registration from Phase 9:
-issuer `https://gitlab.compelcon.se`, subject = your GitLab project/ref
+issuer `https://<gitlab-instance>`, subject = your GitLab project/ref
 claim (e.g. `project_path:<group>/<project>:ref_type:branch:ref:main`, or a
 tag pattern). **Pre-requisite:** Microsoft Entra must be able to fetch
-`https://gitlab.compelcon.se/.well-known/openid-configuration` over the
+`https://<gitlab-instance>/.well-known/openid-configuration` over the
 public internet with valid TLS. For a private-cloud instance this is the
 crux — if Entra can't reach the discovery document, federation cannot
 validate the token.

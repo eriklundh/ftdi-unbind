@@ -15,7 +15,7 @@
 #
 # Part of the ftdi-unbind toolkit.
 # Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
-# Repository: gitlab.compelcon.se/unified-serial-terminal/ftdi-unbind
+# Repository: github.com/eriklundh/ftdi-unbind
 #
 
 # Do not exit on individual command failures — a diagnostic script should
@@ -830,6 +830,6 @@ them before running if you want to verify what they do:
   cat macos-linux/ftdi-bind
 
 For a versioned download (recommended — same as the .exe release page):
-  gitlab.compelcon.se/unified-serial-terminal/ftdi-unbind/-/releases"
+  github.com/eriklundh/ftdi-unbind/releases"
 
 printf "\n"
