@@ -26,6 +26,12 @@ on:
   push:
     tags:
       - 'v*'
+  # Escape hatch: tag pushes (from the GitLab mirror and even direct pushes)
+  # have been observed not to generate push events on this repo, leaving the
+  # release unbuilt. Dispatching the workflow AT THE TAG REF is equivalent:
+  # github.ref_name is the tag, so versioning and release creation behave
+  # identically:  gh workflow run release.yml --ref v0.1.3
+  workflow_dispatch:
 
 permissions:
   contents: write    # create release + upload assets
