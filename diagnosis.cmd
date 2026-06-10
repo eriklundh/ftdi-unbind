@@ -42,7 +42,7 @@ powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%PS1%" 
 exit /b %ERRORLEVEL%
 
 :help
-:: Render the comment-based help written in diagnosis.ps1 (.SYNOPSIS,
-:: .DESCRIPTION, usage, examples, and the about/author block in .NOTES).
-powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-Help -Full '%PS1%'"
+:: diagnosis.ps1 -Help prints a hand-written help text that covers both the
+:: CMD and PowerShell invocations — same output no matter which shell.
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%PS1%" -Help
 exit /b %ERRORLEVEL%

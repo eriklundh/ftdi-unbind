@@ -39,12 +39,42 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'SilentlyContinue'
 
 # Help: accept the same spellings as diagnosis.cmd — /? -? /h -h /help --help —
-# so the script behaves the same whether the student is in CMD or PowerShell.
-# (-h and -help bind to $Help via alias; the slash/double-dash forms arrive as
-# the positional VidPid argument or in $args.)
+# and print the same hand-written text in both shells, so a student does not
+# need to know whether they are in CMD or PowerShell (Get-Help's cmdlet-style
+# output would only confuse them). -h and -help bind to $Help via alias; the
+# slash/double-dash forms arrive as the positional VidPid argument or in $args.
 $_helpPattern = '^(?:[-/]\?|[-/]h|[-/]help|--help|help)$'
 if ($Help -or $VidPid -match $_helpPattern -or ($args -match $_helpPattern)) {
-    Get-Help -Full $PSCommandPath
+    Write-Host @'
+
+  FTDI device diagnosis for Windows
+  Read-only. Changes nothing. Needs no Administrator rights.
+
+  Works the same from CMD and from PowerShell:
+
+    diagnosis.cmd                     (CMD / double-click)
+    .\diagnosis.ps1                   (PowerShell)
+
+  Usage:
+
+    diagnosis.cmd  [VID:PID] [-Detailed]
+    .\diagnosis.ps1 [VID:PID] [-Detailed]
+
+      VID:PID      USB IDs to look for. Default 0403:6015 (FTDI FT231X /
+                   FT232R - used on the ULX3S and many other FPGA boards).
+                   Accepted forms:  0403:6015   403:6015   0x0403:0x6015
+      -Detailed    Also print the full Windows driver-store listing
+                   (-v also works)
+      /?           This help (also: -? /h -h /help --help)
+
+  What it does: checks which FTDI USB devices Windows sees, their driver
+  state (VCP serial / WinUSB / driverless), COM port health, the driver
+  store, and Smart App Control - then a SUMMARY tells you what to do next.
+
+  Author Erik Lundh, The Joy of Engineering, erik.lundh@ingenjorsgladje.se
+  Repository and releases: github.com/eriklundh/ftdi-unbind
+
+'@
     exit 0
 }
 
