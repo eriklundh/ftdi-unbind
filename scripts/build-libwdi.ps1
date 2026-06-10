@@ -23,6 +23,13 @@ $ErrorActionPreference = 'Stop'
 $libwdiTag  = 'v1.5.0'
 $libwdiRepo = 'https://github.com/pbatard/libwdi.git'
 
+# Resolve relative -LibwdiDir/-OutDir against the CALLER's cwd now: the
+# collect step below runs after Push-Location $LibwdiDir, where a relative
+# OutDir would silently land inside libwdi-src/ — and the consumer (CI's
+# cmake -DLIBWDI_INCLUDE_DIR) would find nothing at the repo root.
+if (-not [System.IO.Path]::IsPathRooted($LibwdiDir)) { $LibwdiDir = Join-Path (Get-Location) $LibwdiDir }
+if (-not [System.IO.Path]::IsPathRooted($OutDir))    { $OutDir    = Join-Path (Get-Location) $OutDir }
+
 $libFile = Join-Path $OutDir 'lib\libwdi.lib'
 $incFile = Join-Path $OutDir 'include\libwdi.h'
 
