@@ -32,7 +32,7 @@
 param(
     [string]$VidPid = '0403:6015',
     [Alias('v','verbose')][switch]$Detailed,
-    [Alias('h','help')][switch]$Help
+    [Alias('h')][switch]$Help
 )
 
 Set-StrictMode -Version Latest
