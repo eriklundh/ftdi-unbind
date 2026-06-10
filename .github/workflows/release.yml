@@ -67,8 +67,10 @@ jobs:
       - name: Configure CMake
         shell: cmd
         run: |
+          rem No -G pin: use the runner image's default Visual Studio generator,
+          rem so VS upgrades on windows-latest (17->18->...) don't break the build.
           cmake -S windows -B windows\build ^
-            -G "Visual Studio 17 2022" -A x64 ^
+            -A x64 ^
             -DFTDI_BUILD_TESTS=ON ^
             -DLIBWDI_INCLUDE_DIR=%CD%\libwdi-out\include ^
             -DLIBWDI_LIB=%CD%\libwdi-out\lib\libwdi.lib
