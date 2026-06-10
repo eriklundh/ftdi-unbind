@@ -22,6 +22,7 @@
     .\diagnosis.ps1
     .\diagnosis.ps1 0403:6014
     .\diagnosis.ps1 0x0403:0x6010
+    .\diagnosis.ps1 /?            # show this help (also -? /h -h /help --help)
 
 .NOTES
     Part of the ftdi-unbind toolkit.
@@ -30,11 +31,22 @@
 #>
 param(
     [string]$VidPid = '0403:6015',
-    [Alias('v','verbose')][switch]$Detailed
+    [Alias('v','verbose')][switch]$Detailed,
+    [Alias('h','help')][switch]$Help
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'SilentlyContinue'
+
+# Help: accept the same spellings as diagnosis.cmd — /? -? /h -h /help --help —
+# so the script behaves the same whether the student is in CMD or PowerShell.
+# (-h and -help bind to $Help via alias; the slash/double-dash forms arrive as
+# the positional VidPid argument or in $args.)
+$_helpPattern = '^(?:[-/]\?|[-/]h|[-/]help|--help|help)$'
+if ($Help -or $VidPid -match $_helpPattern -or ($args -match $_helpPattern)) {
+    Get-Help -Full $PSCommandPath
+    exit 0
+}
 
 # Normalise VID:PID: strip 0x prefix, pad to 4 hex digits, lower case
 $_raw = $VidPid -replace '(?i)0x','' -replace '\s',''
