@@ -117,22 +117,44 @@ pulls GitHub's signed assets (`publish-from-github`).
   federated-credential create` command rejects them). **This fix is committed
   locally on `main` but may be UNPUSHED** — check `git log origin/main..main`.
 
+**Release pipeline shakedown — state as of 2026-06-10 (first real runs):**
+
+The "cut a fresh tag and the mirror triggers GitHub" plan did NOT work and
+four latent bugs were found and fixed on the way. Current knowledge:
+
+- **Tag pushes generate NO push events on the GitHub repo** — neither from
+  the GitLab mirror nor from direct authenticated pushes (branch pushes do;
+  verified via the events API). `on: push: tags:` therefore never fires.
+  `release.yml` now has a `workflow_dispatch` escape hatch — dispatch AT THE
+  TAG REF and `github.ref_name` is the tag, so it behaves identically:
+  `gh workflow run release.yml -R eriklundh/ftdi-unbind --ref vX.Y.Z`
+  (gh on Agentlab1 is authenticated as eriklundh with repo+workflow scopes).
+- Fixed in `scripts/build-libwdi.ps1`: USER_DIR was never inserted into
+  config.h (substring guard matched upstream's commented mention) → embedder
+  C1189; and relative `-OutDir` resolved inside libwdi-src after
+  Push-Location → C1083 libwdi.h not found.
+- Fixed in `release.yml`: CMake generator un-pinned (windows-latest now
+  ships VS 2026 / MSBuild 18; "Visual Studio 17 2022" no longer exists).
+- Tag ledger: `v0.1.1`/`v0.1.2` inert (no event, no run), `v0.1.3` failed
+  (USER_DIR), `v0.1.4` failed (generator), `v0.1.5` failed (OutDir),
+  `v0.1.6` = build+ctest+unix packaging all PASS; **fails only at "Azure
+  login (OIDC)": AADSTS90002 tenant not found — the AZURE_TENANT_ID repo
+  secret value is not a valid tenant.** Set 2026-06-08, likely mangled.
+
 **Next steps (in order):**
-1. Push the local `main` commits if any are unpushed (`git push origin main`);
-   the mirror carries them to GitHub.
-2. **Publish the first signed release.** The mirrored `v0.1.0` tag will NOT
-   trigger `release.yml` because that workflow post-dates the tagged commit.
-   Cut a fresh tag whose commit contains `.github/workflows/release.yml`
-   (e.g. `git tag v0.1.1 && git push origin v0.1.1`). On GitLab that push
-   mirrors to GitHub, where `release.yml` builds libwdi → builds → ctest →
-   signs via `azure/artifact-signing-action@v0` (endpoint
-   `https://neu.codesigning.azure.net/`, account `Trusted-Signing-TJE1`,
-   profile `Compelcon-AB-MS-Code-signed`) → assembles all assets + SHA256SUMS
-   → `gh release create`. Then the GitLab `publish-from-github` job pulls
-   those signed assets and creates the GitLab release.
-3. Verify: GitHub Release has the three exes signed (Authenticode Valid) plus
-   the Linux/macOS tarball, three diagnosis scripts, the all-in-one zip, and
-   SHA256SUMS.
+1. Fix `AZURE_TENANT_ID` (Erik: Azure portal → Entra ID → Overview, or
+   `az account show --query tenantId`; then
+   `gh secret set AZURE_TENANT_ID -R eriklundh/ftdi-unbind`) — or rerun
+   `scripts/setup-github-oidc.ps1 -GitHubRepo eriklundh/ftdi-unbind
+   -ScopeToAccount -SetGitHubSecrets` from an az-logged-in machine to
+   rewrite all three secrets.
+2. `gh run rerun 27276801560 --failed -R eriklundh/ftdi-unbind` (the v0.1.6
+   run) — or dispatch fresh at the tag ref.
+3. Verify: GitHub Release has the three exes signed (Authenticode Valid),
+   `windows/LICENSE` (GPL-3.0) inside the windows zip, the Linux/macOS
+   tarball with the MIT `LICENSE`, three diagnosis scripts, the all-in-one
+   zip, and SHA256SUMS. Then the GitLab `publish-from-github` job pulls the
+   signed assets and creates the GitLab release.
 
 **Open content decisions (non-blocking):**
 - Download/release links — **resolved 2026-06-10:** every public-facing
