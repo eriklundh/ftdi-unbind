@@ -11,7 +11,7 @@ signing identity*. This doc is the cross-cutting summary; the deep how-to is
 
 | Item | Why it is safe |
 |---|---|
-| `signing.metadata.json` (Endpoint, account name, profile name) | **Identifiers, not credentials.** Knowing them does not let anyone sign — they would need the *signer role* on our Azure identity. It also *must* be committed: it is the `/dmdf` file `signtool` reads. |
+| `scripts/signing.metadata.json` (Endpoint, account name, profile name) | **Identifiers, not credentials.** Knowing them does not let anyone sign — they would need the *signer role* on our Azure identity. It also *must* be committed: it is the `/dmdf` file `signtool` reads. |
 | The release workflows (`.github/workflows/release.yml`, `.gitlab-ci.yml`) | They reference secrets by name (`${{ secrets.* }}` / masked CI vars); the values are never in the file. |
 | `scripts/sign-local.ps1`, `scripts/release-local.ps1` | They contain no secrets; auth comes from the surrounding context (`az login` / OIDC). |
 

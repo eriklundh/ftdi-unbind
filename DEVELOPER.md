@@ -54,7 +54,7 @@ Release binaries are signed via Azure Code Signing. See
 [`scripts/sign-local.ps1`](scripts/sign-local.ps1) for local signing.
 
 The signing endpoint configuration is in
-[`signing.metadata.json`](signing.metadata.json) (no credentials —
+[`scripts/signing.metadata.json`](scripts/signing.metadata.json) (no credentials —
 authentication uses Azure OIDC in CI).
 
 ### Linux / macOS

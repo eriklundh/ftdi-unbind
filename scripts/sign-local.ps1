@@ -16,10 +16,10 @@
 #   - Microsoft.Azure.TrustedSigningClientTools installed
 #     (winget install -e --id Microsoft.Azure.TrustedSigningClientTools)
 #   - The 64-bit signtool.exe on PATH (the x64 Native Tools prompt, or full path)
-#   - signing.metadata.json in the repo root (see signing.metadata.json.template)
+#   - signing.metadata.json in scripts/ (next to this script)
 
 param(
-    [string]$MetadataFile = "$PSScriptRoot\..\signing.metadata.json",
+    [string]$MetadataFile = "$PSScriptRoot\signing.metadata.json",
 
     [Parameter(Mandatory, Position = 0, ValueFromRemainingArguments)]
     [string[]]$Files
@@ -28,7 +28,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if (-not (Test-Path $MetadataFile)) {
-    throw "signing.metadata.json not found at $MetadataFile.`nCopy signing.metadata.json.template and fill in your values."
+    throw "signing.metadata.json not found at $MetadataFile.`nCreate it with Endpoint / CodeSigningAccountName / CertificateProfileName (see docs/SIGNING.md)."
 }
 
 # Locate the Azure CodeSigning dlib.

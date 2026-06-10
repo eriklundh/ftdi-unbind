@@ -64,7 +64,7 @@ The only thing that is ever a secret is a *client secret* (and the OIDC
 paths avoid even that).
 
 ```json
-// signing.metadata.json  (committed; no secrets)
+// scripts/signing.metadata.json  (committed; no secrets)
 {
   "Endpoint": "https://neu.codesigning.azure.net/",
   "CodeSigningAccountName": "Trusted-Signing-TJE1",
@@ -100,7 +100,7 @@ The one signing command (identical across contexts; only auth differs):
 signtool.exe sign /v /fd SHA256 `
   /tr http://timestamp.acs.microsoft.com /td SHA256 `
   /dlib "<path>\Azure.CodeSigning.Dlib.dll" `
-  /dmdf "<repo>\signing.metadata.json" `
+  /dmdf "<repo>\scripts\signing.metadata.json" `
   ftdi-unbind.exe ftdi-bind.exe ftdi-doctor.exe
 ```
 

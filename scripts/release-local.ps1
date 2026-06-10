@@ -46,7 +46,7 @@ $WinDir    = Join-Path $RepoRoot 'windows'
 $BuildDir  = Join-Path $WinDir   'build-release'   # dedicated; never clobbers your dev build dir
 $ReleaseBin= Join-Path $BuildDir 'Release'
 $DistDir   = Join-Path $RepoRoot 'dist'
-$Metadata  = Join-Path $RepoRoot 'signing.metadata.json'
+$Metadata  = Join-Path $PSScriptRoot 'signing.metadata.json'
 $SignScript= Join-Path $PSScriptRoot 'sign-local.ps1'
 $Exes      = 'ftdi-unbind.exe','ftdi-bind.exe','ftdi-doctor.exe'
 

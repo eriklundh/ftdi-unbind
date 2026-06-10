@@ -85,7 +85,7 @@ laptop, GitHub OIDC, GitLab OIDC):
 
 Non-secret identifiers committed to the repo:
 ```json
-// signing.metadata.json
+// scripts/signing.metadata.json
 {
   "Endpoint": "https://neu.codesigning.azure.net/",
   "CodeSigningAccountName": "Trusted-Signing-TJE1",
