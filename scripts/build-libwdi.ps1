@@ -52,9 +52,18 @@ $cfg = Get-Content 'msvc\config.h' -Raw
 # Comment out WDK_DIR, LIBUSB0_DIR, LIBUSBK_DIR lines.
 $cfg = $cfg -replace '(?m)^(#define\s+(WDK_DIR|LIBUSB0_DIR|LIBUSBK_DIR)\s+.*)', '// $1'
 
-# Add USER_DIR placeholder if not already present.
-if ($cfg -notmatch 'USER_DIR') {
-    $cfg = $cfg -replace '(// #define WDK_DIR)', "`$1`r`n#define USER_DIR `"C:/nonexistent-placeholder`""
+# embedder.h demands at least one of WDK_DIR / LIBUSB0_DIR / LIBUSBK_DIR /
+# USER_DIR; with the three above commented out, define USER_DIR pointing at a
+# real EMPTY directory so the embedder has nothing to embed but nothing to
+# fail on. Upstream config.h mentions USER_DIR in a comment ("// #define
+# USER_DIR ..."), so the check must match only an ACTIVE define — a plain
+# substring test never inserts anything and the embedder build fails with
+# C1189 "at least one of ... must be defined".
+if ($cfg -notmatch '(?m)^\s*#define\s+USER_DIR\b') {
+    $emptyDir = Join-Path (Get-Location) 'user-dir-empty'
+    New-Item -ItemType Directory -Force -Path $emptyDir | Out-Null
+    $emptyDirC = $emptyDir -replace '\\', '/'
+    $cfg = $cfg -replace '(// #define WDK_DIR)', "#define USER_DIR `"$emptyDirC`"`r`n`$1"
 }
 
 # Comment out OPT_ARM.
