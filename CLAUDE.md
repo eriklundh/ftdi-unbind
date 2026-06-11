@@ -135,26 +135,41 @@ four latent bugs were found and fixed on the way. Current knowledge:
   Push-Location → C1083 libwdi.h not found.
 - Fixed in `release.yml`: CMake generator un-pinned (windows-latest now
   ships VS 2026 / MSBuild 18; "Visual Studio 17 2022" no longer exists).
-- Tag ledger: `v0.1.1`/`v0.1.2` inert (no event, no run), `v0.1.3` failed
-  (USER_DIR), `v0.1.4` failed (generator), `v0.1.5` failed (OutDir),
-  `v0.1.6` = build+ctest+unix packaging all PASS; **fails only at "Azure
-  login (OIDC)": AADSTS90002 tenant not found — the AZURE_TENANT_ID repo
-  secret value is not a valid tenant.** Set 2026-06-08, likely mangled.
+- More latent bugs found on the way to green (all fixed on `main`):
+  AZURE_TENANT_ID + AZURE_CLIENT_ID secrets were mangled (rewritten
+  2026-06-10 22:18 by setup-github-oidc.ps1 -SetGitHubSecrets, from the
+  correct az session); the separate `winget install` of the signing tools
+  hung hosted runners for 60+ min (removed — the artifact-signing-action
+  installs its own tooling); the action's input is
+  `trusted-signing-account-name`, not `code-signing-account-name`;
+  timeout-minutes added (15 sign step / 45 windows job); GitHub-owned
+  actions bumped to Node 24 majors (checkout v6, cache v5,
+  upload-artifact v7, download-artifact v8).
+- Tag ledger: `v0.1.1`–`v0.1.6` are dead tags from the shakedown (inert /
+  failed at successive layers). **`v0.1.7` = RELEASED 2026-06-11** on both
+  platforms, fully verified: SHA256SUMS validates all 7 assets; GPL-3.0 in
+  the windows zip, MIT in the tarball; all three exes Authenticode-signed
+  and `Get-AuthenticodeSignature` says **Valid** on a real Windows machine.
+- GitLab side: `publish-from-github` is untagged (any Linux runner); the
+  Agentlab1 runner (id 2) is enabled on this project, so releases push
+  through with the Pi 5 offline (the Pi stays a pure HIL-test runner).
+  Gotcha: a pipeline created while no eligible runner existed can stay
+  stuck `pending` after the runner appears — cancel+retry the job.
 
-**Next steps (in order):**
-1. Fix `AZURE_TENANT_ID` (Erik: Azure portal → Entra ID → Overview, or
-   `az account show --query tenantId`; then
-   `gh secret set AZURE_TENANT_ID -R eriklundh/ftdi-unbind`) — or rerun
-   `scripts/setup-github-oidc.ps1 -GitHubRepo eriklundh/ftdi-unbind
-   -ScopeToAccount -SetGitHubSecrets` from an az-logged-in machine to
-   rewrite all three secrets.
-2. `gh run rerun 27276801560 --failed -R eriklundh/ftdi-unbind` (the v0.1.6
-   run) — or dispatch fresh at the tag ref.
-3. Verify: GitHub Release has the three exes signed (Authenticode Valid),
-   `windows/LICENSE` (GPL-3.0) inside the windows zip, the Linux/macOS
-   tarball with the MIT `LICENSE`, three diagnosis scripts, the all-in-one
-   zip, and SHA256SUMS. Then the GitLab `publish-from-github` job pulls the
-   signed assets and creates the GitLab release.
+**Release runbook (proven 2026-06-11):**
+1. `git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z` and ALSO push the
+   tag to GitHub directly (mirror tag pushes create no events):
+   `git -c credential.helper='!gh auth git-credential' push https://github.com/eriklundh/ftdi-unbind.git refs/tags/vX.Y.Z`
+2. Dispatch the workflow at the tag (push events for tags never fire):
+   `gh workflow run release.yml -R eriklundh/ftdi-unbind --ref vX.Y.Z`
+3. When the GitHub release is published, the GitLab tag pipeline's
+   `publish-from-github` job picks up the assets and creates the GitLab
+   release (kick it with a job retry if it pre-dates runner availability).
+
+**Next (optional, precondition met):** execute the private CI-hardening
+plan at `~/unified-serial-terminal/ACTIONS-SECURITY-UPGRADE-PLAN.md`
+(SHA-pin all actions, Dependabot, artifact-signing-action v0→v2). Keep
+that file out of the public repo until done.
 
 **Open content decisions (non-blocking):**
 - Download/release links — **resolved 2026-06-10:** every public-facing
