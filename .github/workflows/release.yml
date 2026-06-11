@@ -42,6 +42,7 @@ jobs:
   build-windows:
     name: Build Windows exes
     runs-on: windows-latest
+    timeout-minutes: 45
 
     env:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -92,22 +93,17 @@ jobs:
           tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Install Azure Artifact Signing tools
-        if: ${{ env.AZURE_CLIENT_ID != '' }}
-        shell: pwsh
-        run: winget install -e --id Microsoft.Azure.TrustedSigningClientTools --silent --accept-source-agreements --accept-package-agreements
-
       - name: Sign exes (Azure Artifact Signing)
         if: ${{ env.AZURE_CLIENT_ID != '' }}
         uses: azure/artifact-signing-action@v0
-        # v0 is the stable release as of the service rename (Jan 2026).
-        # The shared sign-local.ps1 can be used as a fallback if the action
-        # has not yet published a v1/v2 tag: add a step that calls
-        #   pwsh -File scripts/sign-local.ps1 windows\build\Release\*.exe
+        timeout-minutes: 15
+        # The action installs its own signing tooling (see its
+        # cache-dependencies input) - no separate winget step needed; a
+        # winget install here previously hung the hosted runner for 60+ min.
         with:
-          endpoint:                   https://neu.codesigning.azure.net/
-          code-signing-account-name:  Trusted-Signing-TJE1
-          certificate-profile-name:   Compelcon-AB-MS-Code-signed
+          endpoint:                     https://neu.codesigning.azure.net/
+          trusted-signing-account-name: Trusted-Signing-TJE1
+          certificate-profile-name:     Compelcon-AB-MS-Code-signed
           files-folder:               windows\build\Release
           files-folder-filter:        exe
           file-digest:                SHA256
