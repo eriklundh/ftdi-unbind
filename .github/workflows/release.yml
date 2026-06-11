@@ -47,12 +47,12 @@ jobs:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # ── libwdi: restore from cache or build ──────────────────────────────
       - name: Cache libwdi
         id: cache-libwdi
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: libwdi-out
           # Key includes the libwdi version pinned in build-libwdi.ps1.
@@ -136,7 +136,7 @@ jobs:
           echo "ZIP=$zip" >> $env:GITHUB_ENV
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-x64
           path: ${{ env.ZIP }}
@@ -148,7 +148,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Determine version
         id: ver
@@ -163,7 +163,7 @@ jobs:
           echo "TAR=ftdi-tools-${{ steps.ver.outputs.tag }}-linux-macos.tar.gz" >> "$GITHUB_ENV"
 
       - name: Upload Unix artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-macos
           path: ${{ env.TAR }}
@@ -179,10 +179,10 @@ jobs:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
 
