@@ -68,14 +68,14 @@ bind-unbind-cycle:
   tags: [rpi5]
   <<: *hw_rules
   script:
-    - sudo macos-linux/ftdi-unbind "$FTDI_VID_PID"
+    - sudo /usr/local/bin/ftdi-unbind "$FTDI_VID_PID"
     - sleep 1
     - 'test -z "$(ls /dev/ttyUSB* 2>/dev/null)" && echo "PASS: no ttyUSB* after unbind" || { echo "FAIL: ttyUSB* still present after unbind"; exit 1; }'
-    - sudo macos-linux/ftdi-bind "$FTDI_VID_PID"
+    - sudo /usr/local/bin/ftdi-bind "$FTDI_VID_PID"
     - sleep 1
     - 'ls /dev/ttyUSB* 2>/dev/null && echo "PASS: ttyUSB* present after rebind" || { echo "FAIL: no ttyUSB* after rebind"; exit 1; }'
   after_script:
-    - sudo macos-linux/ftdi-bind "$FTDI_VID_PID" 2>/dev/null || true
+    - sudo /usr/local/bin/ftdi-bind "$FTDI_VID_PID" 2>/dev/null || true
 
 # ── Windows spot-checks — manual, on the on-demand laptop runner ─────────────
 # The Windows runner (tags: windows / windows-hw) is a laptop that is not
