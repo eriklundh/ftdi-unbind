@@ -1,4 +1,4 @@
-# PI4-TESTRUNNER.md — a Raspberry Pi 4 as the shelf HIL test station
+# rpi4-testrunner.md — a Raspberry Pi 4 as the shelf HIL test station
 
 Decision record + setup pointers for running the hardware-in-the-loop
 (HIL) test station on a **Raspberry Pi 4** instead of a Pi 5. Written
