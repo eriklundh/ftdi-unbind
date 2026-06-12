@@ -145,8 +145,10 @@ four latent bugs were found and fixed on the way. Current knowledge:
   timeout-minutes added (15 sign step / 45 windows job); GitHub-owned
   actions bumped to Node 24 majors (checkout v6, cache v5,
   upload-artifact v7, download-artifact v8).
-- Tag ledger: `v0.1.1`–`v0.1.6` are dead tags from the shakedown (inert /
-  failed at successive layers). **`v0.1.7` = RELEASED 2026-06-11** on both
+- Tag ledger: `v0.1.1`–`v0.1.6` were dead tags from the shakedown (inert /
+  failed at successive layers) — **deleted from both remotes 2026-06-12**
+  (GitLab: temporary v* unprotect → delete → re-protect Maintainers).
+  **`v0.1.7` = RELEASED 2026-06-11** on both
   platforms, fully verified: SHA256SUMS validates all 7 assets; GPL-3.0 in
   the windows zip, MIT in the tarball; all three exes Authenticode-signed
   and `Get-AuthenticodeSignature` says **Valid** on a real Windows machine.
@@ -176,8 +178,9 @@ that file out of the public repo until done.
   URL (diagnosis scripts, DEVELOPER.md, signing docs) points at
   github.com/eriklundh/ftdi-unbind. The internal GitLab group URL appears
   in this file only; other docs say `<gitlab-instance>`.
-- winget package ID `Compelcon.FtdiUnbind` — keep (company/signer branding)
-  or rebrand under eriklundh.
+- winget package ID — **resolved 2026-06-12: keep `Compelcon.FtdiUnbind`**
+  (matches the Authenticode signer identity, Compelcon AB; consistent
+  publisher branding beats namespace symmetry with GitHub).
 
 ### Key design decisions (carry into new sessions)
 
