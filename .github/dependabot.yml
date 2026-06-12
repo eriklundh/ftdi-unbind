@@ -1,0 +1,14 @@
+# Dependabot keeps the SHA-pinned actions in .github/workflows/ fresh.
+# It understands sha-pin-with-version-comment and PRs both together.
+#
+# MIRROR GOTCHA: this repo's GitHub presence is a push-mirror of the GitLab
+# canonical. Do NOT merge Dependabot PRs on GitHub - the next mirror sync
+# force-pushes over them. Apply the PR's diff to GitLab main instead
+# (cherry-pick or re-create), then close the PR; Dependabot sees the pin
+# moved and stays quiet.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
