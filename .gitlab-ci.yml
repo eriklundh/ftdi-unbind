@@ -77,6 +77,51 @@ bind-unbind-cycle:
   after_script:
     - sudo macos-linux/ftdi-bind "$FTDI_VID_PID" 2>/dev/null || true
 
+# ── Windows spot-checks — manual, on the on-demand laptop runner ─────────────
+# The Windows runner (tags: windows / windows-hw) is a laptop that is not
+# always on, so this job is manual + allow_failure: it never blocks a
+# pipeline, and an offline laptop just leaves it unplayed.
+#
+# What it proves (the Windows items the Linux dev box cannot — no pwsh):
+#   * every documented help spelling of diagnosis.ps1 / diagnosis.cmd
+#     prints the hand-written help and exits 0
+#   * a plain diagnosis.ps1 run on a machine without the FTDI device —
+#     the "device absent" state (read-only, no admin, by design)
+#   * every .ps1 in the repo parses (load-safety)
+#   * the relocated release plumbing: scripts\RELEASE.cmd + the signing
+#     scripts + scripts\signing.metadata.json are where release-local.ps1
+#     and sign-local.ps1 expect them (paths derive from $PSScriptRoot).
+#     RELEASE.cmd itself is NOT run: it ends in `pause` and real signing
+#     needs an interactive az login — that stays a by-hand button.
+windows-smoke:
+  stage: diagnose
+  tags: [windows]
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - when: manual
+      allow_failure: true
+  script:
+    - '.\diagnosis.ps1 -Help'
+    - '.\diagnosis.ps1 -h'
+    - '.\diagnosis.ps1 -help'
+    - '.\diagnosis.ps1 -?'
+    - '.\diagnosis.ps1 /?'
+    - 'cmd /c "diagnosis.cmd /?"'
+    - 'cmd /c "diagnosis.cmd -h"'
+    - '.\diagnosis.ps1'
+    - |
+      Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+        $tokens = $null; $errors = $null
+        [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+        if ($errors.Count) { throw "PARSE ERROR $($_.FullName): $($errors[0].Message)" }
+      }
+      Write-Host "All .ps1 files parse clean."
+    - 'if (-not (Test-Path scripts\RELEASE.cmd))       { throw "scripts\RELEASE.cmd missing" }'
+    - 'if (-not (Test-Path scripts\release-local.ps1)) { throw "scripts\release-local.ps1 missing" }'
+    - 'if (-not (Test-Path scripts\sign-local.ps1))    { throw "scripts\sign-local.ps1 missing" }'
+    - '$null = Get-Content -Raw scripts\signing.metadata.json | ConvertFrom-Json; Write-Host "signing.metadata.json parses."'
+
 # ── Tag path A: native build + sign on a GitLab Windows runner ───────────────
 build-sign-native:
   stage: release
