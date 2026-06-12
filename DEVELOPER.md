@@ -87,6 +87,38 @@ The workflow:
 See [`packaging/README.md`](packaging/README.md) for the Homebrew formula
 and winget manifest update procedure.
 
+### Supply-chain policy: every action is SHA-pinned
+
+All `uses:` lines in the workflows reference a **full commit SHA**, with
+the human-readable version as a trailing comment:
+
+```yaml
+uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10   # v6.0.3
+```
+
+Why: a `@vN` tag is mutable — whoever controls (or compromises) the action
+repository can move it. The release job holds `id-token: write` (the Azure
+signing identity) and `contents: write` (release publishing), so a
+malicious action would run with the authority to sign and publish
+binaries. Pinning to a SHA makes the executed code immutable.
+
+Maintenance rules:
+
+- **New actions enter the workflow pinned.** Resolve the SHA at the time
+  of adding (never copy one from a doc or chat):
+
+  ```sh
+  gh api repos/<owner>/<action>/git/ref/tags/<version> --jq .object.sha
+  # if .object.type was "tag" (annotated), dereference once more:
+  gh api repos/<owner>/<action>/git/tags/<that-sha> --jq .object.sha
+  ```
+
+- **Updates come from Dependabot** ([`.github/dependabot.yml`](.github/dependabot.yml),
+  monthly, github-actions ecosystem). It understands the
+  sha-plus-version-comment format and PRs both together. Note the mirror
+  rule in that file: apply the diff to the canonical remote; never merge
+  the PR on the GitHub mirror.
+
 ## History
 
 This repository consolidates two formerly standalone projects, with their
